@@ -1,19 +1,20 @@
 # -*- coding: utf-8 -*-
 """
-Created on Sun Dec 18 22:16:21 2022
+Created on Thu Apr 24 11:13:42 2025
 
-@author: WANGH0M
+@author: wanghui
 """
-__author__ = 'Hui'
+
 #------------------------------------------------------------------------------
 import os
 
 import sys
 
-path = os.path.dirname(os.path.abspath(__file__))
+#path = os.path.dirname(os.path.abspath(__file__))
+path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 sys.path.append(path)
-#print(path)
+#print(path, os.path)
 
 from traits.api import Button,String,on_trait_change, Float, Bool, Range,Int
 
@@ -27,7 +28,7 @@ from geometrylab.vtkplot.edgesource import Edges
 from geometrylab.vtkplot.facesource import Faces
 from geometrylab.geometry import Polyline
 
-from guidedprojection_orthonet import GP_OrthoNet
+from guidedprojection_doi import GP_DOINet
 from archgeolab.archgeometry.conicSection import get_sphere_packing,\
     get_vs_interpolated_sphere
 
@@ -44,9 +45,9 @@ from archgeolab.archgeometry.conicSection import get_sphere_packing,\
 #------------------------------------------------------------------------------
 
 
-class OrthoNet(GeolabComponent):
+class DOINet(GeolabComponent):
 
-    name = String('Orthogonal-Net')
+    name = String('DOI-Net')
     
     itera_run = Int(5)
 
@@ -84,6 +85,7 @@ class OrthoNet(GeolabComponent):
     glide_7th_bdry = Bool(label='7th')
     glide_8th_bdry = Bool(label='8th')
 
+    show_corner = Bool(label='ShowConer')
     sharp_corner = Bool(label='SharpCor')
     
     self_closeness = Float(0,label='selfC')
@@ -128,9 +130,9 @@ class OrthoNet(GeolabComponent):
     ####----------------------------------------------------------------------- 
     #--------------Optimization: -----------------------------
     button_clear_constraint = Button(label='Clear')
-
-    orthogonal = Bool(label='Orthogonal')
     
+    orthogonal = Bool(label='Orthogonal')
+
     button_minimal_mesh = Button(label='Minimal')
     Anet = Bool(0)  
     Anet_diagnet = Bool(label='AnetDiag')
@@ -142,32 +144,31 @@ class OrthoNet(GeolabComponent):
     Snet_constR = Bool(False,label='constR') ##only under Snet/Snet_diagnet
     if_uniqR = Bool(False) 
     Snet_constR_assigned = Float(label='const.R')
-
-    button_principal_mesh = Button(label='PrincipalMesh')
-    planarity = Bool(label='PQ')
     
-    button_funicularity = Button(label='OrthoFunicular')
-    equilibrium = Bool(label='Equilibrium') #equilibrium with vertical load
+    Gnet = Bool(label='Gnet') 
+    Gnet_diagnet = Bool(label='diagGnet')
 
-    button_Multinets_Orthogonal = Button(label='Multinets-Orthogonal')
-    multinets_orthogonal = Bool(label='multinets-orthogonal')
-    # if_set_weight = Bool(False)
-    weigth_multinets_orthogonal = Float(label='weight.MO')
     
     #--------------Plotting: -----------------------------
-    show_isogonal_face_based_vector = Bool(label='F-Vec')
     show_midpoint_edge1 = Bool(label='E1')
     show_midpoint_edge2 = Bool(label='E2')
     show_midpoint_polyline1 = Bool(label='Ply1')
     show_midpoint_polyline2 = Bool(label='Ply2')
     show_midline_mesh = Bool(label='ReMesh')
+    
+    show_checkboard_black = Bool(label='Parallelogram')
+    show_checkboard_white = Bool(label='CBP-W')
+    show_checkboard_black_GI = Bool(label='GI') 
+    
+    show_diagonal_red_mesh = Bool(False,label='DiagM1')
+    show_diagonal_blue_mesh = Bool(False,label='DiagM2')
+    show_diagonal_mesh = Bool(False,label='DiagM')
 
     show_vs_sphere = Bool(label='VS-Sphere')
     show_snet_center = Bool(label='Snet-C')
     show_snet_normal = Bool(label='Snet-N')
     show_snet_tangent = Bool(label='Snet-T')
-
-    show_multinets_diagonals = Bool(label='Multinets-Diagonals') 
+    
     
     print_error = Button(label='Error')
     #--------------Save: --------------------
@@ -176,7 +177,7 @@ class OrthoNet(GeolabComponent):
     save_new_mesh = None
     
     #--------------Print: -----------------------------
-    print_orthogonal = Button(label='Check')
+    print_check = Button(label='Check')
     print_computation = Button(label='Computation')
     #--------------------------------------------------------------------------
     view = View(VGroup(Group(
@@ -184,45 +185,50 @@ class OrthoNet(GeolabComponent):
     Group(## 1st-panel
         VGroup(
               #HGroup(Item('set_another_poly'),),    
-              HGroup('orthogonal',),
-              HGroup('planarity',
+
+              HGroup('orthogonal',
                      ),
-              HGroup('Anet',
-                     'Anet_diagnet',),
               HGroup('Snet',
                      'Snet_diagnet',
                      #'Snet_orient',
                      'Snet_constR',
                      Item('if_uniqR',show_label=False),
                      'Snet_constR_assigned'),
-              HGroup('equilibrium',
+              HGroup('Gnet','Gnet_diagnet',
+                     'Anet',
+                     'Anet_diagnet',
                      ),
-              HGroup(Item('button_principal_mesh',show_label=False),
-                     Item('button_minimal_mesh',show_label=False),
+              HGroup(Item('button_minimal_mesh',show_label=False),
                      Item('button_CMC_mesh',show_label=False),
-                     Item('button_funicularity',show_label=False),
                      Item('button_clear_constraint',show_label=False)
                      ),
-              HGroup(Item('button_Multinets_Orthogonal',show_label=False),
-                     'multinets_orthogonal',
-                     'weigth_multinets_orthogonal'
-                     ), 
+
         label='Opt',show_border=True),
         #------------------------------------------------  
-        VGroup(HGroup('show_isogonal_face_based_vector',
-                      'show_midpoint_edge1',
+        VGroup(HGroup('show_midpoint_edge1',
                       'show_midpoint_edge2',
                       'show_midpoint_polyline1',
                       'show_midpoint_polyline2',
                       'show_midline_mesh'),
+              HGroup('show_checkboard_black',
+                     'show_diagonal_red_mesh',
+                     'show_diagonal_blue_mesh',
+                     'show_diagonal_mesh',
+                     'show_checkboard_white',
+                     #'show_checkboard_black_GI',
+                     ),
               HGroup('show_vs_sphere',
                      'show_snet_center',
                      'show_snet_tangent',
                      'show_snet_normal',),
-              HGroup('show_multinets_diagonals',), 
         label='Plotting',show_border=True),
         #------------------------------------------------  
-        VGroup(HGroup(Item('print_error',show_label=False)),),
+        VGroup(HGroup(Item('print_check',show_label=False),
+                      Item('print_computation',show_label=False),
+                      Item('print_error',show_label=False)),
+               label='Check',
+               show_border=True),
+           #--------------------------------------
         
         #------------------------------------------------  
         label='Opt',show_border=True),
@@ -246,7 +252,16 @@ class OrthoNet(GeolabComponent):
                       'fairness_reduction',
                       'fairness_diagmesh',
                show_border=True,label='Fairness'),
-        
+          ###-------------------------------------
+          HGroup('label',
+                 Item('save_button',show_label=False),
+                 label='Saving',show_border=True),
+       #----------------------------------------------------------------------
+       
+       show_border=False,label='GP1'),  
+    #---------------------------------------------------------
+    #---------------------------------------------------------
+    Group(## 2nd-panel
         VGroup(HGroup(Item('close5',show_label=False),
                       Item('close1',show_label=False),
                       Item('close05',show_label=False),
@@ -267,9 +282,14 @@ class OrthoNet(GeolabComponent):
                       'glide_6th_bdry',
                       'glide_7th_bdry',
                       'glide_8th_bdry',),
-               HGroup('sharp_corner'),
+               HGroup('show_corner',
+                      'sharp_corner'),
                show_border=True,label='Closeness'),
-                
+          ###-------------------------------------
+       show_border=False,label='GP2'), 
+    #---------------------------------------------------------
+    #---------------------------------------------------------
+    Group(## 2nd-panel
          VGroup(HGroup('weight_fix'),
                 HGroup(
                        'fix_all',
@@ -284,22 +304,8 @@ class OrthoNet(GeolabComponent):
                        Item('unfix_button',show_label=False),
                        Item('clearfix_button',show_label=False)),    
              show_border=True,label='select'),   
-                                      
           ###-------------------------------------
-           VGroup(VGroup(
-                   HGroup(Item('print_orthogonal',show_label=False),
-                          Item('print_computation',show_label=False),),
-                       ),
-                  label='Check',
-                  show_border=True),
-           #--------------------------------------
-          HGroup('label',
-                 Item('save_button',show_label=False),
-                 label='Saving',show_border=True),
-       #----------------------------------------------------------------------
-       
-       show_border=False,
-              label='GP'),                        
+       show_border=False,label='GP3'),                             
              #-----------------
              show_border=False,
              layout='tabbed'),  
@@ -324,7 +330,7 @@ class OrthoNet(GeolabComponent):
     def __init__(self):
         GeolabComponent.__init__(self)
 
-        self.optimizer = GP_OrthoNet()
+        self.optimizer = GP_DOINet()
         
         self.counter = 0
         
@@ -348,8 +354,8 @@ class OrthoNet(GeolabComponent):
     #
     # -------------------------------------------------------------------------
     def geolab_settings(self):
-        self.geolab.height = 1000
-        self.geolab.width = 1300
+        self.geolab.height = 600
+        self.geolab.width = 600
         
     def object_open(self, file_name, geometry):
         name = ('mesh_{}').format(self.counter)
@@ -561,6 +567,8 @@ class OrthoNet(GeolabComponent):
         self.corner_fairness = 0
         self.tangential_fairness = self.spring_fairness =  0
         self.fairness_diagmesh = 0
+        self.fairness_4diff = 0
+        self.fairness_diag_4diff = 0
 
     @on_trait_change('fairness_4diff')
     def set_fairness_4differential(self):
@@ -852,33 +860,43 @@ class OrthoNet(GeolabComponent):
                                            tube_radius=1.5*self.meshmanager.r,
                                            color = 'r',name=name)
         else:
-            self.meshmanager.remove(name)   
+            self.meshmanager.remove(name)  
+            
+    @on_trait_change('show_corner')
+    def showAllCorners(self):
+        name = 'show_corner'
+        if self.show_corner:
+            C = self.mesh.vertices[self.mesh.corner]
+            r = self.meshmanager.r
+            self.meshmanager.plot_glyph(points=C,color='r',
+                                        radius=2*r,name=name)
+        else:
+            self.meshmanager.remove(name)
+
             
     # -------------------------------------------------------------------------
-    #                      Orthogonal NET: Weights + Plotting:
+    #                     Isogonal Net : Weights + Plotting
     # -------------------------------------------------------------------------
-
     @on_trait_change('button_clear_constraint')
     def set_clear_webs(self):
-        self.planarity = False
         self.orthogonal = False
-        self.equilibrium = False
-
-        self.Anet = False
-        self.Anet_diagnet = False
 
         self.Snet = False
         self.Snet_diagnet = False
         self.Snet_constR = False
         self.if_uniqR = False
         
-        self.multinets_orthogonal = False
-        self.weigth_multinets_orthogonal = 0.0
-        # self.if_set_weight = False
+        self.Anet = False
+        self.Anet_diagnet = False
         
+        self.Gnet = False
+        self.Gnet_diagnet = False
+        
+        "NOTE: if remove Gnet(diag), must also remove unit_edge(diag)"
         self.optimizer.set_weight('unit_edge_vec', 0)
         self.optimizer.set_weight('unit_diag_edge_vec', 0)
         
+
     @on_trait_change('button_minimal_mesh')
     def set_orthogonal_Anet(self): 
         self.orthogonal = True  
@@ -891,47 +909,10 @@ class OrthoNet(GeolabComponent):
         self.Snet_orient = True
         self.Snet_constR = True
 
-    @on_trait_change('button_principal_mesh')
-    def set_principal_mesh(self): 
-        self.orthogonal = True  
-        self.planarity = True
-        
-    @on_trait_change('button_funicularity')
-    def set_funicularity(self): 
-        self.orthogonal = True  
-        self.equilibrium = True
-    
-    @on_trait_change('button_Multinets_Orthogonal')
-    def set_multinets_orthogonal(self):
-        self.multinets_orthogonal = True
-        # self.if_set_weight =True
-        self.weigth_multinets_orthogonal = 1.0
-
+            
     #---------------------------------------------------------        
     #                       Ploting
-    #---------------------------------------------------------
-    @on_trait_change('show_isogonal_face_based_vector')
-    def plot_isogonal_facebased_cross_vector(self):
-        name = 'isg_f_v'
-        if self.show_isogonal_face_based_vector:
-            _,_,t1,t2,an = self.mesh.get_quad_midpoint_cross_vectors()
-            ang = np.arccos(np.einsum('ij,ij->i',t1,t2))/np.pi*180
-            print('\n mean_angle =',np.mean(ang))
-            print(' max_angle   =',np.max(ang))
-            self.meshmanager.plot_vectors(anchor=an,vectors=t1,
-                                          position = 'center',
-                                          glyph_type = 'line',
-                                          color = 'b',
-                                          name = name+'11')
-            self.meshmanager.plot_vectors(anchor=an,vectors=t2,
-                                          position = 'center',
-                                          glyph_type = 'line',
-                                          color = 'r',
-                                          name = name+'22')
-        else:
-            self.meshmanager.remove([name+'11',name+'22'])              
-
-            
+    #---------------------------------------------------------         
     @on_trait_change('show_midpoint_edge1,show_midpoint_edge2')
     def plot_midpoint_edges(self):
         "same was as plot_isogonal_facebased_cross_vector; but different visulization"
@@ -991,24 +972,109 @@ class OrthoNet(GeolabComponent):
             self.meshmanager.add([showe])
         else:
             self.meshmanager.remove([name+'e',name+'f'])   
-
-    @on_trait_change('show_multinets_diagonals') 
-    def plot_multinets_diagonals(self):
-        name = 'multi_diagonal'
-        if self.show_multinets_diagonals:
-            pl1,pl2 = self.mesh.Get_Diagonals_of_Multinets()
-            self.meshmanager.plot_polyline(pl1,
-                                           tube_radius=0.5*self.meshmanager.r,
-                                           color=(138,43,226),glossy=1,
-                                           name = name+'1')
             
-            self.meshmanager.plot_polyline(pl2,
-                                            tube_radius=0.5*self.meshmanager.r,
-                                            color=(255,215,0),glossy=1,
-                                            name = name+'2')
             
+    @on_trait_change('show_checkboard_black')
+    def plot_checkboard_black(self):
+        name = 'ckb'
+        if self.show_checkboard_black:
+            ck = self.mesh.get_checkboard_black(is_rr=True)
+            lamda,mu = self.mesh.get_quad_parallelogram_similarity()
+            data = lamda/mu
+            print('lamda:[min,mean,max]=','%.3f'%np.min(lamda),'%.3f'%np.mean(lamda),'%.3f'%np.max(lamda))
+            print('mu:[min,mean,max]=','%.3f'%np.min(mu),'%.3f'%np.mean(mu),'%.3f'%np.max(mu))
+            print('lamda/mu:[min,mean,max]=','%.3f'%np.min(data),'%.3f'%np.mean(data),'%.3f'%np.max(data))
+            
+            showf = Faces(ck,faces_data=data,opacity=0.5,
+                          color='brg',lut_range = [0,np.max(data)*1.1], ##change range
+                          name=name)
+            self.meshmanager.add(showf)
+            self.save_new_mesh = ck
+            self.label = name
         else:
-            self.meshmanager.remove([name+'1',name+'2'])  
+            self.meshmanager.remove(name)
+
+    @on_trait_change('show_checkboard_white')
+    def plot_checkboard_white(self):
+        name = 'ckw'
+        if self.show_checkboard_white:
+            ck = self.mesh.get_checkboard_white()
+            self.save_new_mesh = ck
+            self.label = name
+            showf = Faces(ck,color ='w',name=name)
+            self.meshmanager.add(showf)
+        else:
+            self.meshmanager.remove(name)
+
+    @on_trait_change('show_checkboard_black_GI')
+    def plot_checkboard_black_GI(self):
+        name = 'ckb_GI'
+        if self.show_checkboard_black_GI:
+            GI = self.mesh.get_checkboard_black(is_GI=True)
+            #showf = Faces(GI,color = (8,45,130),opacity=0.5,name=name)##NOTE:OPACITY
+            showe = Edges(GI,color='black',name=name+'e')
+            self.meshmanager.add(showe)
+            self.meshmanager.plot_glyph(points=GI.vertices,radius=2*self.meshmanager.r,
+                                        color='black',name=name+'v')
+            
+            self.save_new_mesh = GI
+            self.label = name
+        else:
+            self.meshmanager.remove([name,name+'e',name+'v'])
+            
+    @on_trait_change('show_diagonal_red_mesh')
+    def plot_diagonal_red_mesh(self):
+        name = 'dmesh1'
+        if self.show_diagonal_red_mesh:
+            dm = self.mesh.get_diagonal_mesh()
+            ### geo:red:(240,114,114);asy:blue:(98,113,180)
+            showe = Edges(dm,color ='white',#(98,113,180)(255,85,127),(0,59,117)
+                          tube_radius=1*self.meshmanager.r, # 2*
+                          glossy=1,
+                          name=name+'e')
+            # showf = Faces(dm,color ='white',#(100,0,0),
+            #               opacity=0.8,
+            #               name=name+'f')
+            
+            self.meshmanager.add([showe])
+            self.save_new_mesh = dm
+            self.label = name
+        else:
+            self.meshmanager.remove([name+'e',name+'f'])
+
+    @on_trait_change('show_diagonal_blue_mesh')
+    def plot_diagonal_blue_mesh(self):
+        name = 'dmesh2'
+        if self.show_diagonal_blue_mesh:
+            dm = self.mesh.get_diagonal_mesh(blue=True)
+            showe = Edges(dm,color =(0,59,117),#(0,0,100),#(85,85,225),
+                          tube_radius=0.6*self.meshmanager.r,
+                          glossy=0.8,
+                          name=name+'e')
+            # showf = Faces(dm,color ='white',#opacity=0.8,#(0,0,100),
+            #               name=name+'f')
+            self.meshmanager.add([showe])
+            self.save_new_mesh = dm
+            self.label = name
+        else:
+            self.meshmanager.remove([name+'e',name+'f'])
+
+
+    @on_trait_change('show_diagonal_mesh')
+    def plot_diagonal_mesh_checkboard(self):
+        name = 'dmesh'
+        if self.show_diagonal_mesh:
+            dm = self.mesh.get_diagonal_mesh(whole=True) # whole mesh
+            self.save_new_mesh = dm
+            self.label = name
+            showe = Edges(dm,color =(0,59,117), # red: a2142f 162,20,47; blue:(0,59,117))
+                          tube_radius=0.6*self.meshmanager.r,
+                          glossy=0.8,
+                          name=name+'e')
+            #showf = Faces(dm,color =(0,0,100),name=name+'f')
+            self.meshmanager.add([showe])
+        else:
+            self.meshmanager.remove([name+'e',name+'f'])               
 
     #---------------------------------------------------------        
     #               Anet / Snet - Ploting
@@ -1091,12 +1157,6 @@ class OrthoNet(GeolabComponent):
     #--------------------------------------------------------------------------
     #                         Printing / Check
     #--------------------------------------------------------------------------         
-    @on_trait_change('print_orthogonal')
-    def print_orthogonal_data(self):
-        pass
-        #angle_min, angle_mean, angle_max = 
-        #print('angle:[min,mean,max]=','%.3f'%angle_min,'%.3f'%angle_mean,'%.3f'%angle_max)
-
     @on_trait_change('print_computation')
     def print_computation_info(self):
         print('No. of all vertices: ', self.mesh.V)
@@ -1109,6 +1169,15 @@ class OrthoNet(GeolabComponent):
         print('#variables: ', len(self.optimizer.X))
         print('#constraints: ', len(self.optimizer._r))
         #print('time[s] per iteration: ',  )
+
+    @on_trait_change('print_check')
+    def print_isogonal_data(self):
+        #print('theta:[min,mean,max]=','%.3f'%angle_min,'%.3f'%angle_mean,'%.3f'%angle_max)
+        print('check')
+
+    @on_trait_change('print_error')
+    def print_errors(self):
+        self.optimizer.make_errors()
     #--------------------------------------------------------------------------
     #                                    Save txt / obj
     #--------------------------------------------------------------------------
@@ -1116,11 +1185,12 @@ class OrthoNet(GeolabComponent):
     def save_file(self):
         name = ('{}').format(self.label)
         if self.save_new_mesh is None:
-            #self.save_new_mesh = self.mesh
+            self.save_new_mesh = self.mesh
             pass
- 
-        save_path =  'objs'     
-        completeName = os.path.join(save_path, name)   
+        #save_path = '/objs'     
+        
+        save_path = r'/Users/wanghui/Github/DOI/objs'    
+        completeName = os.path.join(save_path, name)
         self.save_new_mesh.make_obj_file(completeName)
 
         print('\n\n NOTE: <'+self.label+'> mesh has been saved in <'+completeName+'>\n')
@@ -1160,12 +1230,7 @@ class OrthoNet(GeolabComponent):
         self.optimizer.set_weight('boundary_z0', self.boundary_z0)
         
         # ---------------------------------------------------------------------
-        self.optimizer.set_weight('planarity', self.planarity)
         self.optimizer.set_weight('orthogonal',  self.orthogonal*1)
-        self.optimizer.set_weight('equilibrium',  self.equilibrium)
-        
-        self.optimizer.set_weight('Anet',  self.Anet)
-        self.optimizer.set_weight('Anet_diagnet',  self.Anet_diagnet)
 
         self.optimizer.set_weight('Snet', self.Snet)
         self.optimizer.set_weight('Snet_diagnet', self.Snet_diagnet)
@@ -1174,11 +1239,13 @@ class OrthoNet(GeolabComponent):
         self.optimizer.if_uniqradius = self.if_uniqR
         self.optimizer.assigned_snet_radius = self.Snet_constR_assigned
         
-        self.optimizer.set_weight('multinets_orthogonal', self.weigth_multinets_orthogonal)
+        self.optimizer.set_weight('Anet',  self.Anet)
+        self.optimizer.set_weight('Anet_diagnet',  self.Anet_diagnet)
+        
+        self.optimizer.set_weight('Gnet', self.Gnet)
+        self.optimizer.set_weight('Gnet_diagnet', self.Gnet_diagnet)
 
-    @on_trait_change('print_error')
-    def print_errors(self):
-        self.optimizer.make_errors()
+
     # -------------------------------------------------------------------------
     #                         Reset + Optimization
     # -------------------------------------------------------------------------
@@ -1186,6 +1253,7 @@ class OrthoNet(GeolabComponent):
         self.optimizer.is_initial = True 
         #self.planarity = False
         #self.orthogonal = False
+        #self.isogonal = False
 
     @on_trait_change('reinitialize')
     def reinitialize_optimizer(self):
@@ -1219,13 +1287,13 @@ class OrthoNet(GeolabComponent):
 
     @on_trait_change('optimize')
     def optimize_mesh(self):
-        #import time
-        #start_time = time.time()
+        import time
+        start_time = time.time()
         itera = self.itera_run
         self.meshmanager.iterate(self.optimization_step, itera) # note:iterations from gpbase.py
         self.meshmanager.update_plot()
         
-        #print('time[s] per iteration:','%.3g s' %((time.time() - start_time)/itera))
+        print('time[s] per iteration:','%.3g s' %((time.time() - start_time)/itera))
             
     @on_trait_change('interactive')
     def interactive_optimize_mesh(self):

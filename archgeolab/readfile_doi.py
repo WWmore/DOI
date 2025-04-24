@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Created on Sun Dec 18 22:16:21 2022
+Created on Thu Apr 24 11:13:42 2025
 
-@author: WANGH0M
+@author: wanghui
 """
 
 # All rights reserved.
@@ -10,7 +10,7 @@ Created on Sun Dec 18 22:16:21 2022
 # This software is free for non-commercial, research and evaluation use 
 # under the terms of the LICENSE.md file.
 #
-# For inquiries contact hui.wang.1@kaust.edu.sa
+# For inquiries contact hwangchn@outlook.com
 
 #------------------------------------------------------------------------------
 import os
@@ -32,26 +32,18 @@ sys.path.append(path)
 # -------------------------------------------------------------------------
 if __name__ == '__main__':
 
-    a = path + r'\objs'
+    a = path + r'/objs'
 
-    pq = a + r'\obj_pq'
-    anet = a + r'\obj_anet'
-    snet = a + r'\obj_snet'
-    equ = a +r'\obj_equilibrium'
-    
-    file = pq + r'\heart.obj' #conical1.obj
-    #file = anet + r'\knet1.obj'
-    #file = snet + r'\cmc1.obj'
-    #file = equ + r'\quad_dome.obj'
-    
-    ## if MacBook:
-    file = path + '/objs/obj_equilibrium' + '/quad_dome.obj'
+    rot = a + r'/obj_rot'
+    snet = a + r'/obj_snet'
 
+    file = snet +r'/cmc1.obj'
+    #file =r'/Users/wanghui/Desktop/geometrylab7/obj_rotation/rot1.obj'
     #----------------------------------------
 
     '''Instantiate the sample component'''
-    from opt_gui_orthonet import OrthoNet
-    component = OrthoNet()
+    from opt_gui_doi import DOINet
+    component = DOINet()
 
     '''Instantiate the main geolab application'''
     from archgeolab.archgeometry.gui_basic import GeolabGUI

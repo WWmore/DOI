@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Created on Sun Dec 18 22:16:21 2022
+Created on Thu Apr 24 11:13:42 2025
 
-@author: WANGH0M
+@author: wanghui
 """
 __author__ = 'Hui'
 #------------------------------------------------------------------------------
@@ -22,11 +22,6 @@ from archgeolab.constraints.constraints_net import con_unit_edge,\
 from archgeolab.constraints.constraints_glide import con_glide_in_plane,\
     con_alignment,con_alignments,con_selected_vertices_glide_in_one_plane,\
     con_fix_vertices,con_sharp_corner
-            
-from archgeolab.constraints.constraints_equilibrium import edge_length_constraints,\
-    equilibrium_constraints,compression_constraints,area_constraints,\
-    vector_area_constraints,\
-    boundary_densities_constraints,fixed_boundary_normals_constraints
                     
 from archgeolab.archgeometry.conicSection import interpolate_sphere
 
@@ -34,7 +29,7 @@ from archgeolab.archgeometry.conicSection import interpolate_sphere
 
 # -----------------------------------------------------------------------------
 
-class GP_OrthoNet(GuidedProjectionBase):
+class GP_DOINet(GuidedProjectionBase):
     _N1 = 0
     
     _N2 = 0
@@ -84,25 +79,13 @@ class GP_OrthoNet(GuidedProjectionBase):
 
 
         ##Note: below from geometrylab/optimization/Guidedprojection.py:
-        'normal' : 0, #no use, replaced Davide's planarity way
-
-        'edge_length' : 0,
-
-        'area' : 0,
-
-        'geometric' : 1, #default is True, used in constraints_equilibrium.py
-
         'fixed_vertices' : 1,
 
         'fixed_corners' : 0,
 
         'gliding' : 0, # Huinote: glide on boundary, used for itself boundary
-
-        'equilibrium' : 0,
         
-        'multinets_orthogonal' : 0,
-
-        'fixed_boundary_normals': 0,        
+        'multinets_orthogonal' : 0, 
         
         }
 
@@ -131,35 +114,10 @@ class GP_OrthoNet(GuidedProjectionBase):
     def mesh(self, mesh):
         self._mesh = mesh
         self.initialization()
-        
-    @property
-    def compression(self):
-        return self._compression
-
-    @compression.setter
-    def compression(self, bool):
-        if bool:
-            self._compression = 2*self.get_weight('equilibrium')
-            self.reinitialize = True
-        elif self._compression > 0:
-             self._compression = 0
-
-    @property
-    def tension(self):
-        return -self._compression
-
-    @tension.setter
-    def tension(self, bool):
-        if bool:
-            self._compression = -2*self.get_weight('equilibrium')
-            self.reinitialize = True
-        elif self._compression < 0:
-            self._compression = 0
 
     @property
     def max_weight(self):    
-        return max(self.get_weight('geometric'),
-                   self.get_weight('equilibrium'),
+        return max(
                    self.get_weight('boundary_glide'),
                    self.get_weight('planarity'),
                    
@@ -216,32 +174,16 @@ class GP_OrthoNet(GuidedProjectionBase):
     #--------------------------------------------------------------------------
 
     def set_weights(self):
-        if self.get_weight('equilibrium') != 0:
-            if self.mesh.area_load != 0:
-                if self.get_weight('area') == 0:
-                    self.set_weight('area', 1 * self.get_weight('equilibrium'))
-            else:
-                self.set_weight('area', 0)
-        if self.reinitialize:
-            if self.get_weight('equilibrium') != 0:
-                self.set_weight('edge_length', 1 * self.get_weight('equilibrium'))
-                if self.mesh.area_load != 0:
-                    self.set_weight('area', 1*self.get_weight('equilibrium'))
-            if self.get_weight('planarity') != 0:
-                self.set_weight('normal', 1*self.get_weight('planarity'))
         self.set_weight('fixed_vertices', 10 * self.max_weight)
         self.set_weight('gliding', 10 * self.max_weight)
         if self.get_weight('fixed_corners') != 0:
             self.set_weight('fixed_corners', 10 * self.max_weight)
-        if self.get_weight('fixed_boundary_normals') != 0:
-            self.set_weight('fixed_boundary_normals', 10 * self.max_weight)
 
           
     def set_dimensions(self): # Huinote: be used in guidedprojectionbase
         "X:= [Vx,Vy,Vz]"
         V = self.mesh.V
         F = self.mesh.F
-        E = self.mesh.E
         N = 3*V
         N1 = N2 = N3 = N4 = N5 = N
         num_regular = self.mesh.num_regular
@@ -254,14 +196,6 @@ class GP_OrthoNet(GuidedProjectionBase):
             "X += [Nx,Ny,Nz]"
             N += 3*F
             N1 = N2 = N3 = N4 = N
-        if self.get_weight('equilibrium') != 0:
-            "X += [edge_length, force_density, sqrt_force_density]"
-            N += 3*E
-            N2 = N3 = N4 = N
-        if self.get_weight('area') != 0:
-            "X += [Ax,Ay,Az, area]"
-            N += 4*F
-            N3 = N4 = N
 
         if self.get_weight('unit_edge_vec'): #Gnet, AGnet
             "X+=[le1,le2,le3,le4,ue1,ue2,ue3,ue4]"
@@ -332,17 +266,6 @@ class GP_OrthoNet(GuidedProjectionBase):
             "X += [Nx,Ny,Nz]; len=3F"
             normals = self.mesh.face_normals()
             X = np.hstack((X, normals.flatten('F')))
-        if self.get_weight('equilibrium') != 0:
-            "X += [edge_length, force_density, sqrt_force_density]; len=3E"
-            lengths = self.mesh.edge_lengths()
-            W = self.mesh.force_densities
-            X = np.hstack((X, lengths, W, np.abs(W)**0.5))
-        if self.get_weight('area') != 0:
-            "X += [Ax,Ay,Az, area]; len=4F"
-            vector_area = self.mesh.face_vector_areas()
-            face_area = np.linalg.norm(vector_area, axis=1)
-            vector_area = vector_area.flatten('F')
-            X = np.hstack((X, vector_area, face_area))
 
         if self.get_weight('unit_edge_vec'):
             _,l1,l2,l3,l4,E1,E2,E3,E4 = self.mesh.get_v4_unit_edge(rregular=True)
@@ -519,22 +442,6 @@ class GP_OrthoNet(GuidedProjectionBase):
             #"use Hui's way not Davide's"
             H,r = con_planarity_constraints(**self.weights)  
             self.add_iterative_constraint(H, r, 'planarity')
-            
-        if self.get_weight('equilibrium') != 0:
-            H,r = edge_length_constraints(**self.weights)
-            self.add_iterative_constraint(H, r, 'edge_length')
-            H,r = equilibrium_constraints(**self.weights)
-            self.add_iterative_constraint(H, r,'equilibrium')
-            
-        if self.compression != 0 and self.get_weight('equilibrium') != 0:
-            H,r = compression_constraints(self.compression,**self.weights)
-            self.add_iterative_constraint(H, r, 'compression')
-            
-        if self.get_weight('area') != 0:
-            H,r = area_constraints(**self.weights)
-            self.add_iterative_constraint(H, r, 'face_vector_area')
-            H,r = vector_area_constraints(**self.weights)
-            self.add_iterative_constraint(H, r, 'face_area')
         
         if self.get_weight('multinets_orthogonal') !=0: 
             H,r =  con_multinets_orthogonal(**self.weights)
@@ -653,10 +560,6 @@ class GP_OrthoNet(GuidedProjectionBase):
         self.add_weight('N', self.N)
         H, r = self.mesh.constant_constraints(**self.weights)
         self.add_constant_constraint(H, r, 'mesh_constant')
-        if self.get_weight('equilibrium') > 0:
-            boundary_densities_constraints(**self.weights)
-        if self.get_weight('fixed_boundary_normals') > 0:
-            fixed_boundary_normals_constraints(**self.weights)
 
     def build_constant_fairness(self): #copy from guidedprojection,need to check if it works 
         self.add_weight('N', self.N)
@@ -665,15 +568,9 @@ class GP_OrthoNet(GuidedProjectionBase):
   
     def post_iteration_update(self): #copy from guidedprojection,need to check if it works 
         V = self.mesh.V
-        E = self.mesh.E
-        N1 = self._N1
         self.mesh.vertices[:,0] = self.X[0:V]
         self.mesh.vertices[:,1] = self.X[V:2*V]
         self.mesh.vertices[:,2] = self.X[2*V:3*V]
-        if self.get_weight('equilibrium')!= 0:
-            self.mesh.force_densities = self.X[N1+E:N1+2*E]
-        else:
-            self.mesh.force_densities = np.zeros(self.mesh.E)
 
     def on_reinitilize(self): #copy from guidedprojection,need to check if it works 
         self.mesh.reinitialize_force_densities()
@@ -686,17 +583,6 @@ class GP_OrthoNet(GuidedProjectionBase):
         vertices = self.X[0:3*V]
         vertices = np.reshape(vertices, (V,3), order='F')
         return vertices
-
-    def edge_lengths(self, initialized=False):
-        if self.get_weight('equilibrium') == 0:
-            return None
-        if initialized:
-            X = self._X0
-        else:
-            X = self.X
-        E = self.mesh.E
-        N1 = self._N1
-        return X[N1:N1+E]
 
     def face_normals(self, initialized=False):
         if self.get_weight('planarity') == 0:
@@ -711,50 +597,14 @@ class GP_OrthoNet(GuidedProjectionBase):
         normals = np.reshape(normals, (F,3), order='F')
         return normals
 
-    def face_vector_areas(self, initialized=False):
-        if self.get_weight('area') == 0:
-            return None
-        if initialized:
-            X = self._X0
-        else:
-            X = self.X
-        F = self.mesh.F
-        N2 = self._N2
-        areas = X[N2:N2+3*F]
-        areas = np.reshape(areas, (F,3), order='F')
-        return areas
-
-    def face_areas(self, initialized=False):
-        if self.get_weight('area') == 0:
-            return None
-        if initialized:
-            X = self._X0
-        else:
-            X = self.X
-        F = self.mesh.F
-        N2 = self._N2
-        areas = X[N2+3*F:N2+4*F]
-        return areas
-
-    def force_densities(self):
-        if self.get_weight('equilibrium') == 0:
-            return None
-        E = self.mesh.E
-        N1 = self._N1
-        return self.X[N1+E:N1+2*E]
 
     #--------------------------------------------------------------------------
     #                                Errors strings
     #--------------------------------------------------------------------------
     def make_errors(self):
-        self.edge_length_error()
-        self.equilibrium_error()
-        self.face_areas_error()
-        self.face_vector_areas_error()
-        self.planarity_error() #self.face_normals_error()
+        self.planarity_error()
         self.orthogonal_error()
-        self.anet_error() 
-        #self.geometric_error()
+
 
     def planarity_error(self):
         if self.get_weight('planarity') == 0:
@@ -804,97 +654,7 @@ class GP_OrthoNet(GuidedProjectionBase):
         self.add_error(name, emean, emax, self.get_weight(name))  
         print('anet:[mean,max]=','%.3g'%emean,'%.3g'%emax)
 
-    def face_normals_error(self):
-        if self.get_weight('planarity') == 0:
-            return None
-        N = self.face_normals()
-        N0 = self.face_normals(initialized=True)
-        norm = np.mean(np.linalg.norm(N, axis=1))
-        Err = (np.linalg.norm(N-N0, axis=1)) / norm
-        emean = np.mean(Err)
-        emax = np.max(Err)
-        self.add_error('face_normal', emean, emax, self.get_weight('normal'))
-        print('planarity:[mean,max]=','%.3g'%emean,'%.3g'%emax)
 
-    def edge_length_error(self):
-        if self.get_weight('equilibrium') == 0:
-            return None
-        L = self.edge_lengths()
-        L0 = self.edge_lengths(initialized=True)
-        norm = np.mean(L)
-        Err = np.abs(L-L0) / norm
-        emean = np.mean(Err)
-        emax = np.max(Err)
-        self.add_error('edge_length', emean, emax, self.get_weight('edge_length'))
-        print('edge_length:[mean,max]=','%.3g'%emean,'%.3g'%emax)
-
-    def face_vector_areas_error(self):
-        if self.get_weight('area') == 0:
-            return None
-        A = self.face_vector_areas()
-        A0 = self.face_vector_areas(initialized=True)
-        norm = np.mean(np.linalg.norm(A, axis=1))
-        Err = (np.linalg.norm(A-A0, axis=1)) / norm
-        emean = np.mean(Err)
-        emax = np.max(Err)
-        self.add_error('face_vector_area', emean, emax, self.get_weight('area'))
-        print('area_vector:[mean,max]=','%.3g'%emean,'%.3g'%emax)
-
-    def face_areas_error(self):
-        if self.get_weight('area') == 0:
-            return None
-        A = self.face_areas()
-        A0 = self.face_areas(initialized=True)
-        norm = np.mean(A)
-        Err = (np.abs(A-A0)) / norm
-        emean = np.mean(Err)
-        emax = np.max(Err)
-        self.add_error('face_area', emean, emax, self.get_weight('area'))
-        print('area:[mean,max]=','%.3g'%emean,'%.3g'%emax)
-
-    def equilibrium_error(self):
-        if self.get_weight('equilibrium') == 0:
-            return None
-        Err = self.mesh.equilibrium_error()
-        emean = np.mean(Err)
-        emax = np.max(Err)
-        self.add_error('equilibrium', emean, emax, self.get_weight('equilibrium'))
-        print('equilibrium:[mean,max]=','%.3g'%emean,'%.3g'%emax)
-
-    def geometric_error(self):
-        if len(self._errors) == 0:
-            return None
-        n = 0
-        geo_mean = 0
-        geo_max = 0
-        if self.get_weight('planarity') != 0:
-            err = self.get_error('face_normal')
-            geo_mean += err[0]
-            geo_max = max([geo_max, err[1]])
-            n += 1
-        if self.get_weight('equilibrium') != 0:
-            err = self.get_error('edge_length')
-            geo_mean += err[0]
-            geo_max = max([geo_max, err[1]])
-            n += 1
-            if self.get_weight('area') != 0:
-                err = self.get_error('face_vector_area')
-                geo_mean += err[0]
-                geo_max = max([geo_max, err[1]])
-                err = self.get_error('face_area')
-                geo_mean += err[0]
-                geo_max = max([geo_max, err[1]])
-                n += 2
-        if n > 0:
-            geo_mean = geo_mean / n
-        self.add_error('geometric', geo_mean, geo_mean,
-                       self.get_weight('geometric'))
-
-    def geometric_error_string(self):
-        return self.error_string('geometric')
-
-    def equilibrium_error_string(self):
-        return self.error_string('equilibrium')
 
     def planarity_error_string(self):
         return self.error_string('planarity')
@@ -904,19 +664,3 @@ class GP_OrthoNet(GuidedProjectionBase):
     
     def anet_error_string(self):
         return self.error_string('Anet')
-
-    #--------------------------------------------------------------------------
-    #                                   Utilities
-    #--------------------------------------------------------------------------
-
-    def axial_forces(self):
-        if self.equilibrium != 0:
-            return self.mesh.axial_forces()
-        else:
-            return np.zeros(self.mesh.E)
-
-    def force_resultants(self):
-        return self.mesh.force_resultants()
-
-    def applied_loads(self):
-        return self.mesh.applied_loads()
