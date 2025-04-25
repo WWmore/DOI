@@ -12,8 +12,9 @@ from scipy import sparse
 #------------------------------------------------------------------------------
 """
 from constraints_basic import 
-    column3D,con_edge,con_unit,con_constl,con_equal_length,\
-    con_planarity,con_planarity_constraints,con_unit_normal,con_orient
+    column3D,con_edge,con_unit,con_constl,con_equal_length,con_symmetry,\
+    con_planarity,con_planarity_constraints,con_unit_normal,con_orient,
+    con_dependent_vector,con_equal_opposite_angle
 """
 # -------------------------------------------------------------------------
 #                           general / basic
@@ -99,6 +100,28 @@ def con_equal_length(X,c1,c2,c3,c4):
     H = sparse.coo_matrix((data,(row,col)), shape=(num,len(X)))
     return H,r
 
+def con_symmetry(X,cl,cc,cr):
+    "(vl-vc)^2=(vr-vc)^2 <==> vl^2-vr^2-2*vl*vc+2*vr*vc=0"
+    num = int(len(cc)/3)
+    row = np.tile(np.arange(num),9)
+    col = np.r_[cl,cc,cr]
+    data = 2*np.r_[X[cl]-X[cc],X[cr]-X[cl],-X[cr]+X[cc]]
+    r = np.linalg.norm((X[cl]-X[cc]).reshape(-1,3, order='F'),axis=1)**2
+    r -= np.linalg.norm((X[cr]-X[cc]).reshape(-1,3, order='F'),axis=1)**2
+    H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
+    return H,r
+
+def con_equal_opposite_angle(X,c_e1,c_e2,c_e3,c_e4):
+    "e1*e2-e3*e4=0"
+    num = int(len(c_e1)/3)
+    row = np.tile(np.arange(num),12)
+    col = np.r_[c_e1,c_e2,c_e3,c_e4]
+    data = np.r_[X[c_e2],X[c_e1], -X[c_e4], -X[c_e3]]
+    H = sparse.coo_matrix((data,(row,col)), shape=(num,len(X)))
+    r = np.einsum('ij,ij->i',X[c_e1].reshape(-1,3, order='F'),X[c_e2].reshape(-1,3, order='F'))
+    r -= np.einsum('ij,ij->i',X[c_e3].reshape(-1,3, order='F'),X[c_e4].reshape(-1,3, order='F'))
+    return H,r
+
 def con_orient(X,Nv,c_vN,c_a,neg=False):
     "vN*Nv = a^2; if neg: vN*Nv = -a^2; variables: vN, a; Nv is given"
     if neg:
@@ -113,7 +136,43 @@ def con_orient(X,Nv,c_vN,c_a,neg=False):
     H = sparse.coo_matrix((data,(row,col)), shape=(num,len(X))) 
     return H,r
 
+def con_diagonal(X,c_v1,c_v3,c_d1):
+    "(v1-v3)^2=d1^2"
+    num = int(len(c_v1)/3)
+    row = np.tile(np.arange(num),7)
+    col = np.r_[c_v1,c_v3,c_d1*np.ones(num)]
+    dd = X[c_d1]*np.ones(num,dtype=int)
+    data = 2*np.r_[X[c_v1]-X[c_v3],X[c_v3]-X[c_v1],-dd]
+    r = np.linalg.norm((X[c_v1]-X[c_v3]).reshape(-1,3,order='F'),axis=1)**2-dd**2
+    H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
+    return H,r
 
+def con_dependent_vector(X,c_a,c_b,c_t):
+    """ three variables: a, b,t
+    t x (a-b) = 0
+    <==> t1*(a-b)2=t2*(a-b)1; 
+         t2*(a-b)3=t3*(a-b)2; 
+         t1*(a-b)3=t3*(a-b)1
+    """
+    num = int(len(c_a)/3)
+    arr = np.arange(num)
+    c_ax,c_ay,c_az = c_a[:num], c_a[num:2*num], c_a[2*num:]
+    c_bx,c_by,c_bz = c_b[:num], c_b[num:2*num], c_b[2*num:]
+    c_tx,c_ty,c_tz = c_t[:num], c_t[num:2*num], c_t[2*num:]
+    def _cross(c_ax,c_ay,c_bx,c_by,c_tx,c_ty):
+        "(ax-bx) * ty = (ay-by) * tx"
+        col = np.r_[c_ax,c_ay,c_bx,c_by,c_tx,c_ty]
+        row = np.tile(arr,6)
+        data = np.r_[X[c_ty],-X[c_tx],-X[c_ty],X[c_tx],-X[c_ay]+X[c_by],X[c_ax]-X[c_bx]]
+        r = (X[c_ax]-X[c_bx])*X[c_ty] - (X[c_ay]-X[c_by])*X[c_tx]
+        H = sparse.coo_matrix((data,(row,col)), shape=(num,len(X))) 
+        return H,r
+    H12,r12 = _cross(c_ax,c_ay,c_bx,c_by,c_tx,c_ty)
+    H23,r23 = _cross(c_az,c_ay,c_bz,c_by,c_tz,c_ty)
+    H13,r13 = _cross(c_ax,c_az,c_bx,c_bz,c_tx,c_tz)
+    H = sparse.vstack((H12,H23,H13))
+    r = np.r_[r12,r23,r13]
+    return H,r
     # -------------------------------------------------------------------------
     #                          Geometric Constraints (from Davide)
     # -------------------------------------------------------------------------

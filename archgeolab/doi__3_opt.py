@@ -17,7 +17,8 @@ from archgeolab.constraints.constraints_fairness import con_fairness_4th_differe
 
 from archgeolab.constraints.constraints_net import con_unit_edge,\
     con_orthogonal_midline,con_anet,con_anet_diagnet,con_snet,\
-    con_snet_diagnet,con_multinets_orthogonal
+    con_snet_diagnet,con_doi,con_doi__freeform,con_kite #con_kite_diagnet
+    #,con_cgc,con_pnet
 
 from archgeolab.constraints.constraints_glide import con_glide_in_plane,\
     con_alignment,con_alignments,con_selected_vertices_glide_in_one_plane,\
@@ -40,7 +41,6 @@ class GP_DOINet(GuidedProjectionBase):
     
     _N5 = 0
     
-    _compression = 0
 
     _mesh = None
     
@@ -68,6 +68,14 @@ class GP_DOINet(GuidedProjectionBase):
         'planarity' : 0,
 
         'orthogonal' :0,
+        
+        'DOI' :0,
+        
+        'Kite' :0,
+        
+        'CGC' :0,
+        'CNC' :0,
+        'Pnet' :0,
 
         'Anet' : 0,  
         'Anet_diagnet' : 0,  
@@ -76,6 +84,9 @@ class GP_DOINet(GuidedProjectionBase):
         'Snet_diagnet' : 0,
         'Snet_orient' : 1,
         'Snet_constR' : 0,
+        
+        'Gnet' : 0,  
+        'Gnet_diagnet' : 0, 
 
 
         ##Note: below from geometrylab/optimization/Guidedprojection.py:
@@ -85,19 +96,33 @@ class GP_DOINet(GuidedProjectionBase):
 
         'gliding' : 0, # Huinote: glide on boundary, used for itself boundary
         
-        'multinets_orthogonal' : 0, 
-        
         }
 
         self.add_weights(weights)
-        
-        self.switch_diagmeth = False
-        
+
         self.is_initial = True
         
         self._glide_reference_polyline = None
         self.i_glide_bdry_crv, self.i_glide_bdry_ver = [],[]
         self.assign_coordinates = None
+        
+        
+        self.is_GO_or_OG = True
+        self.is_diag_or_ctrl = False
+        
+        self.is_DOI_SIR = False
+        self.is_DOI_SIR_diagKite = False
+        self.is_Kite_diagGPC = False
+        self.is_Kite_diagGPC_SIR = False
+        
+        ##pseudogeodesic project:
+        self.is_psangle1,self.is_psangle2 = False,False
+        self.is_pseudogeo_allSameAngle = False
+        self.is_pseudogeo_limitAngle = 0
+        self.pseudogeo_1st_constangle = None
+        self.pseudogeo_2nd_constangle = None
+        self.data_pseudogeodesic_binormal = None #=[an,oN1,oN2,cos13,cos24]
+        
 
         self.if_uniqradius = False
         self.assigned_snet_radius = 0
@@ -121,13 +146,19 @@ class GP_DOINet(GuidedProjectionBase):
                    self.get_weight('boundary_glide'),
                    self.get_weight('planarity'),
                    
-                   self.get_weight('multinets_orthogonal'),
-                   
                    self.get_weight('unit_edge_vec'),
                    self.get_weight('unit_diag_edge_vec'),
                    
                    self.get_weight('orthogonal'),
-
+ 
+                   self.get_weight('DOI'),
+                   
+                   self.get_weight('Kite'),
+                   
+                   self.get_weight('CGC'),
+                   self.get_weight('CNC'),
+                   self.get_weight('Pnet'),
+                   
                    self.get_weight('Anet'),
                    self.get_weight('Anet_diagnet'),
                    
@@ -442,10 +473,7 @@ class GP_DOINet(GuidedProjectionBase):
             #"use Hui's way not Davide's"
             H,r = con_planarity_constraints(**self.weights)  
             self.add_iterative_constraint(H, r, 'planarity')
-        
-        if self.get_weight('multinets_orthogonal') !=0: 
-            H,r =  con_multinets_orthogonal(**self.weights)
-            self.add_iterative_constraint(H, r,'multinets_orthogonal')
+
             
         ###-------partially shared-used codes:---------------------------------
         if self.get_weight('unit_edge_vec'): 
@@ -486,13 +514,35 @@ class GP_DOINet(GuidedProjectionBase):
             H,r = con_sharp_corner(move=0,**self.weights)
             self.add_iterative_constraint(H,r, 'sharp_corner')
             
+        
+        if self.get_weight('z0') !=0:
+            H,r = con_glide_in_plane(2,**self.weights)
+            self.add_iterative_constraint(H,r, 'z0')     
+            
+        ###------- net construction: ------------------------------------------
+            
         if self.get_weight('orthogonal'):
             H,r = con_orthogonal_midline(**self.weights)
             self.add_iterative_constraint(H, r, 'orthogonal')
 
-        if self.get_weight('z0') !=0:
-            H,r = con_glide_in_plane(2,**self.weights)
-            self.add_iterative_constraint(H,r, 'z0')        
+        
+        if self.get_weight('DOI'):
+            yes1, yes2 = self.is_DOI_SIR, self.is_DOI_SIR_diagKite
+            if True:
+                H,r = con_doi__freeform(self.is_GO_or_OG,yes1,yes2,**self.weights)
+            else:
+                "works well, but only for patch or rotational mesh"
+                H,r = con_doi(self.is_GO_or_OG,yes1,**self.weights)
+            self.add_iterative_constraint(H, r, 'DOI')
+            
+        #if self.get_weight('Kite_diagnet'): #Hui: works but not use in alignnet on SIR-net
+            #H,r = con_kite_diagnet(**self.weights)
+            #self.add_iterative_constraint(H, r, 'Kite_diagnet')
+        if self.get_weight('Kite'):
+            yes1,yes2 = self.is_Kite_diagGPC, self.is_Kite_diagGPC_SIR
+            H,r = con_kite(yes1,yes2,**self.weights)
+            self.add_iterative_constraint(H, r, 'Kite')
+            
             
         if self.get_weight('Anet'):
             H,r = con_anet(rregular=True,**self.weights)

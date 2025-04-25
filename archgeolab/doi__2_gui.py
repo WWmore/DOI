@@ -28,7 +28,7 @@ from geometrylab.vtkplot.edgesource import Edges
 from geometrylab.vtkplot.facesource import Faces
 from geometrylab.geometry import Polyline
 
-from guidedprojection_doi import GP_DOINet
+from doi__3_opt import GP_DOINet
 from archgeolab.archgeometry.conicSection import get_sphere_packing,\
     get_vs_interpolated_sphere
 
@@ -132,23 +132,46 @@ class DOINet(GeolabComponent):
     button_clear_constraint = Button(label='Clear')
     
     orthogonal = Bool(label='Orthogonal')
+    
+    GPC_net = Bool(label='GPC')
+    
+    switch_GO_or_OG = Bool(True,label='_GO|OG_')  ## need to choose when window opens
+    
+    DOI_net = Bool(label='DOI')
+    is_DOI_SIR = Bool(label='is_DOI-SIR')
+    is_DOI_SIR_diagKite = Bool(label='is_DOI-SIR-diagKite')
+    
+    Kite_diagnet = Bool(label='Kite_diag')
+    Kite_net = Bool(label='Kite')
+    is_Kite_diagGPC = Bool(label='is_Kite-GPC')
+    is_Kite_diagGPC_SIR = Bool(label='is_Kite-GPC-SIR')
 
-    button_minimal_mesh = Button(label='Minimal')
-    Anet = Bool(0)  
-    Anet_diagnet = Bool(label='AnetDiag')
-
-    button_CMC_mesh = Button(label='CMC')
+    button_align_diagKite = Button(label='AlignDiagKite')
+    button_align_ctrlKite = Button(label='AlignCtrlKite')
+    button_align_CGC = Button(label='AlignCGC')
+    button_align_CNC = Button(label='AlignCNC')
+    button_align_Pnet = Button(label='AlignPnet')
+    
+    CGC_net = Bool(label='CGC')
+    Gnet = Bool(label='Gnet') 
+    Gnet_diagnet = Bool(label='diagGnet')
+      
+    CNC_net = Bool(label='CNC')
     Snet = Bool(label='Snet')
     Snet_diagnet = Bool(label='SnetDiag')
     Snet_orient = Bool(True,label='Orient') ##only under Snet/Snet_diagnet
     Snet_constR = Bool(False,label='constR') ##only under Snet/Snet_diagnet
     if_uniqR = Bool(False) 
     Snet_constR_assigned = Float(label='const.R')
+    button_CMC_mesh = Button(label='CMC')
     
-    Gnet = Bool(label='Gnet') 
-    Gnet_diagnet = Bool(label='diagGnet')
+    Anet = Bool(label='Anet')  
+    Anet_diagnet = Bool(label='AnetDiag')
+    button_minimal_mesh = Button(label='Minimal')
 
+    Pseudogeodesic_net = Bool(label='Pnet')
     
+
     #--------------Plotting: -----------------------------
     show_midpoint_edge1 = Bool(label='E1')
     show_midpoint_edge2 = Bool(label='E2')
@@ -184,26 +207,33 @@ class DOINet(GeolabComponent):
     #---------------------------------------------------------
     Group(## 1st-panel
         VGroup(
-              #HGroup(Item('set_another_poly'),),    
+              HGroup(Item('switch_GO_or_OG'),),    
+              #HGroup('orthogonal','GPC_net'),
+              HGroup('DOI_net','is_DOI_SIR','is_DOI_SIR_diagKite'),
+              HGroup('Kite_net','is_Kite_diagGPC','is_Kite_diagGPC_SIR'),
+              HGroup('CGC_net','Gnet','Gnet_diagnet',),
+              HGroup('CNC_net','Anet','Anet_diagnet',),
+              # HGroup('Snet',
+              #        'Snet_diagnet',
+              #        #'Snet_orient',
+              #        'Snet_constR',
+              #        Item('if_uniqR',show_label=False),
+              #        'Snet_constR_assigned'),
+              HGroup('Pseudogeodesic_net',
+                     Item('button_clear_constraint',show_label=False)),
 
-              HGroup('orthogonal',
+              HGroup(Item('button_align_diagKite',show_label=False),
+                     Item('button_align_ctrlKite',show_label=False),
                      ),
-              HGroup('Snet',
-                     'Snet_diagnet',
-                     #'Snet_orient',
-                     'Snet_constR',
-                     Item('if_uniqR',show_label=False),
-                     'Snet_constR_assigned'),
-              HGroup('Gnet','Gnet_diagnet',
-                     'Anet',
-                     'Anet_diagnet',
+              HGroup(Item('button_align_CGC',show_label=False),
+                     Item('button_align_CNC',show_label=False),
+                     Item('button_align_Pnet',show_label=False),
                      ),
-              HGroup(Item('button_minimal_mesh',show_label=False),
-                     Item('button_CMC_mesh',show_label=False),
-                     Item('button_clear_constraint',show_label=False)
-                     ),
+              #HGroup(#Item('button_CMC_mesh',show_label=False),
+                     #Item('button_minimal_mesh',show_label=False),
+                     #),
 
-        label='Opt',show_border=True),
+        label='Opt.Net',show_border=True),
         #------------------------------------------------  
         VGroup(HGroup('show_midpoint_edge1',
                       'show_midpoint_edge2',
@@ -875,12 +905,26 @@ class DOINet(GeolabComponent):
 
             
     # -------------------------------------------------------------------------
-    #                     Isogonal Net : Weights + Plotting
+    #                    Weights + Plotting
     # -------------------------------------------------------------------------
     @on_trait_change('button_clear_constraint')
     def set_clear_webs(self):
         self.orthogonal = False
-
+        self.GPC_net = False
+        
+        self.DOI_net = False
+        self.is_DOI_SIR = False
+        self.is_DOI_SIR_diagKite = False
+        
+        self.Kite_net = False
+        self.is_Kite_diagGPC = False
+        self.is_Kite_diagGPC_SIR = False
+        
+        self.CGC_net = False
+        self.Gnet = False
+        self.Gnet_diagnet = False
+          
+        self.CNC_net = False
         self.Snet = False
         self.Snet_diagnet = False
         self.Snet_constR = False
@@ -889,8 +933,7 @@ class DOINet(GeolabComponent):
         self.Anet = False
         self.Anet_diagnet = False
         
-        self.Gnet = False
-        self.Gnet_diagnet = False
+        self.Pseudogeodesic_net = False
         
         "NOTE: if remove Gnet(diag), must also remove unit_edge(diag)"
         self.optimizer.set_weight('unit_edge_vec', 0)
@@ -909,7 +952,39 @@ class DOINet(GeolabComponent):
         self.Snet_orient = True
         self.Snet_constR = True
 
-            
+    @on_trait_change('button_align_diagKite')
+    def set_align_diagKite(self): 
+        self.DOI_net = True
+        self.is_DOI_SIR_net = True
+        self.is_DOI_SIR_diagKite_net = True
+
+    @on_trait_change('button_align_ctrlKite')
+    def set_align_ctrlKite(self): 
+        self.Kite_net = True
+        self.is_Kite_diagGPC = True
+        self.is_Kite_diagGPC_SIR = True
+
+    @on_trait_change('button_align_CGC') #TODO
+    def set_align_CGC(self): 
+        self.is_DOI_SIR_net = True
+        self.is_DOI_SIR_diagKite_net = True
+        self.CGC_net = True
+
+    @on_trait_change('button_align_CNC') #TODO
+    def set_align_CNC(self): 
+        self.is_DOI_SIR_net = True
+        self.is_DOI_SIR_diagKite_net = True
+        self.CNC_net = True
+
+    @on_trait_change('button_align_Pnet') #TODO
+    def set_align_Pnet(self): 
+        self.is_DOI_SIR_net = True
+        self.is_DOI_SIR_diagKite_net = True
+        self.Pseudogeodesic_net = True
+
+    @on_trait_change('switch_GO_or_OG')
+    def switch_GO_or_OG_net(self):
+        self.optimizer.is_GO_or_OG = self.switch_GO_or_OG           
     #---------------------------------------------------------        
     #                       Ploting
     #---------------------------------------------------------         
@@ -1083,6 +1158,7 @@ class DOINet(GeolabComponent):
     def plot_snet_center(self):
         name = 'snetc'
         if self.show_snet_center:
+            is_diag = False
             if self.Snet:
                 is_diag = False
             elif self.Snet_diagnet:
@@ -1099,6 +1175,7 @@ class DOINet(GeolabComponent):
     def plot_snet_normal(self):
         name = 'snetn'
         if self.show_snet_normal:
+            is_diag = False
             if self.Snet:
                 is_diag = False
             elif self.Snet_diagnet:
@@ -1118,6 +1195,7 @@ class DOINet(GeolabComponent):
     def plot_snet_tangent(self):
         name = 'snett'
         if self.show_snet_tangent:
+            is_diag = False
             if self.Snet:
                 is_diag = False
             elif self.Snet_diagnet:
@@ -1231,6 +1309,18 @@ class DOINet(GeolabComponent):
         
         # ---------------------------------------------------------------------
         self.optimizer.set_weight('orthogonal',  self.orthogonal*1)
+        
+        self.optimizer.set_weight('DOI', self.DOI_net)
+        self.optimizer.is_DOI_SIR = self.is_DOI_SIR
+        self.optimizer.is_DOI_SIR_diagKite = self.is_DOI_SIR_diagKite
+        
+        self.optimizer.set_weight('Kite', self.Kite_net)
+        self.optimizer.is_Kite_diagGPC = self.is_Kite_diagGPC
+        self.optimizer.is_Kite_diagGPC_SIR = self.is_Kite_diagGPC_SIR
+        
+        self.optimizer.set_weight('CGC', self.CGC_net)
+        self.optimizer.set_weight('CNC', self.CNC_net)
+        self.optimizer.set_weight('Pnet', self.Pseudogeodesic_net)
 
         self.optimizer.set_weight('Snet', self.Snet)
         self.optimizer.set_weight('Snet_diagnet', self.Snet_diagnet)

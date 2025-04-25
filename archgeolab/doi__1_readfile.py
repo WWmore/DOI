@@ -38,11 +38,14 @@ if __name__ == '__main__':
     snet = a + r'/obj_snet'
 
     file = snet +r'/cmc1.obj'
+    file = rot +r'/conical1.obj'
+    
+    
     #file =r'/Users/wanghui/Desktop/geometrylab7/obj_rotation/rot1.obj'
     #----------------------------------------
 
     '''Instantiate the sample component'''
-    from opt_gui_doi import DOINet
+    from doi__2_gui import DOINet
     component = DOINet()
 
     '''Instantiate the main geolab application'''

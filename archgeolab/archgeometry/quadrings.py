@@ -94,8 +94,11 @@ class MMesh(Mesh):
         return self._inner
     @property
     def corner(self):
-        if self._corner == [] or self._corner is None:
+        #print(self._corner,type(self._corner))
+        #print(len(self._corner))
+        if len(self._corner)==0 or self._corner is None:
             self.nonsingular()
+        #print(self._corner)
         return self._corner
     
     @property
