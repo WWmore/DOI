@@ -19,3 +19,5 @@ from archgeolab.archgeometry import curves
 from archgeolab.archgeometry import gridshell_new
 
 from archgeolab.archgeometry import gui_basic
+
+from archgeolab.archgeometry import getGeometry

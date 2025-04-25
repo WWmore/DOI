@@ -258,7 +258,7 @@ def con_doi__freeform(is_GO_or_OG=True,is_SIR=False,is_diagKite=False,**kwargs):
     X = kwargs.get('X')
     V = mesh.V
     
-    def con_general_chebyshev(rhombus=False,half1=False,half2=False,is_rr=True):
+    def con_general_chebyshev(rhombus=False,half1=False,half2=False,is_rr=False):
         "each quadface, opposite edgelength equal"
         v1,v2,v3,v4 = mesh.rr_quadface.T # in odrder
         
@@ -329,7 +329,7 @@ def con_doi__freeform(is_GO_or_OG=True,is_SIR=False,is_diagKite=False,**kwargs):
         r = np.r_[r, r1, r2]   
     return H*w,r*w
     
-def con_kite(is_diagGPC=False,is_diagSIR=False,is_rr=False,**kwargs):
+def con_kite(is_transpose=False,is_diagGPC=False,is_diagSIR=False,is_rr=False,**kwargs):
     """Kite-net: two pairs of equal edge lengths within quad and on vertex-star
 
     is_diagGPC: 
@@ -355,6 +355,9 @@ def con_kite(is_diagGPC=False,is_diagSIR=False,is_rr=False,**kwargs):
     V = mesh.V
     
     v,v1,v2,v3,v4 = mesh.rr_star.T
+    if is_transpose:
+        v1,v2,v3,v4 = v2,v3,v4,v1
+        
     c_v = column3D(v,0,V)
     c_v1 = column3D(v1,0,V)
     c_v2 = column3D(v2,0,V)
@@ -364,6 +367,8 @@ def con_kite(is_diagGPC=False,is_diagSIR=False,is_rr=False,**kwargs):
     if False: ##need check the quad-vertex oriented samely as rr-vs
         "based on each quad face: |v1-v2|=|v1-v4|, |v3-v2|=|v3-v4|"
         v1,v2,v3,v4 = mesh.rr_quadface.T
+        if is_transpose:
+            v1,v2,v3,v4 = v2,v3,v4,v1
         
         if is_rr:
             ind = mesh.ind_rr_quadface_with_rrv
@@ -393,7 +398,11 @@ def con_kite(is_diagGPC=False,is_diagSIR=False,is_rr=False,**kwargs):
             
             if is_diagSIR:
                 "based on vertex star: |vb-v|=|vd-v|"
-                _,va,vb,vc,vd = mesh.rr_star_corner
+                v,va,vb,vc,vd = mesh.rr_star_corner
+                if is_transpose:
+                    va,vb,vc,vd = vb,vc,vd,va
+                
+                c_v = column3D(v,0,V)
                 #c_va = column3D(va,0,V)
                 c_vb = column3D(vb,0,V)
                 #c_vc = column3D(vc,0,V)
@@ -405,7 +414,7 @@ def con_kite(is_diagGPC=False,is_diagSIR=False,is_rr=False,**kwargs):
         
     return H*w,r*w
 
-def con_kite_diagnet(**kwargs):
+def con_kite_diagnet(is_transpose=False,**kwargs):
     """
     Kite-diagnet: based on each vertex star, two pairs of equal diagonal lengths
 
@@ -428,8 +437,12 @@ def con_kite_diagnet(**kwargs):
     c_vb = column3D(vb,0,V)
     c_vc = column3D(vc,0,V)
     c_vd = column3D(vd,0,V)
-    H1,r1 = con_symmetry(X,c_va,c_v,c_vd)  
-    H2,r2 = con_symmetry(X,c_vb,c_v,c_vc)  
+    if is_transpose:
+        H1,r1 = con_symmetry(X,c_va,c_v,c_vb)  
+        H2,r2 = con_symmetry(X,c_vc,c_v,c_vd)  
+    else:
+        H1,r1 = con_symmetry(X,c_va,c_v,c_vd)  
+        H2,r2 = con_symmetry(X,c_vb,c_v,c_vc)  
     H = sparse.vstack((H1, H2))
     r = np.r_[r1, r2]   
     if True:
@@ -439,8 +452,12 @@ def con_kite_diagnet(**kwargs):
         c_v2 = column3D(v2,0,V)
         c_v3 = column3D(v3,0,V)
         c_v4 = column3D(v4,0,V)
-        H1,r1 = con_symmetry(X,c_v2,c_v1,c_v4)  
-        H2,r2 = con_symmetry(X,c_v2,c_v3,c_v4)  
+        if is_transpose:
+            H1,r1 = con_symmetry(X,c_v1,c_v2,c_v3)  
+            H2,r2 = con_symmetry(X,c_v1,c_v4,c_v3)  
+        else:
+            H1,r1 = con_symmetry(X,c_v2,c_v1,c_v4)  
+            H2,r2 = con_symmetry(X,c_v2,c_v3,c_v4)  
         H = sparse.vstack((H, H1, H2))
         r = np.r_[r, r1, r2]   
     

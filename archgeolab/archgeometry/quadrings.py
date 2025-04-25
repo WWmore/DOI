@@ -17,6 +17,9 @@ from archgeolab.archgeometry.conicSection import interpolate_sphere
 from archgeolab.archgeometry.curves import mesh_polylines,make_polyline_from_endpoints,\
         make_multiple_polylines_from_endpoints,\
         get_isoline_between_2bdry,get_diagonal_polyline_from_2points
+
+from archgeolab.archgeometry.getGeometry import make_quad_mesh_pieces,\
+    get_barycenters_mesh
 #------------------------------------------------------------------------------
 """
 forked and built on geometrylab/geometry/meshpy.py
@@ -78,6 +81,8 @@ class MMesh(Mesh):
         self._rr_quadface_neib = None
         self._ind_rr_star_v4f4,self._ind_rr_quadface_order = None,None
         self._rrv4f4,self._num_rrv4f4, self._ver_rrv4f4= None,0,None
+        
+        self._checker_vertex = None
         self._Bool_SequenceNumber = None 
     # -------------------------------------------------------------------------
     #                        Properties
@@ -394,6 +399,12 @@ class MMesh(Mesh):
         if self._rr_quadface_neib is None:
             self.get_rr_quadface_neibface_normals()
         return self._rr_quadface_neib
+    
+    @property
+    def checker_vertex(self):
+        if self._checker_vertex is None:
+            self.get_checker_select_vertex()
+        return self._checker_vertex
     
     @property
     def Bool_SequenceNumber(self):
@@ -1759,6 +1770,47 @@ class MMesh(Mesh):
         pl1 = make_polyline_from_endpoints(V12,V34)
         pl2 = make_polyline_from_endpoints(V23,V41)
         return pl1,pl2   
+    
+    def get_checkboard_black(self,is_rr=False,is_ck_n=False,is_GI=False):
+        if is_rr:
+            "oriented order of the vertices of quadfaces"
+            order = self.rr_quadface_order
+            v1,v2,v3,v4 = self.rr_quadface.T # in odrder
+        else:
+            vi = self.quadface
+            v1,v2,v3,v4 = vi[::4],vi[1::4],vi[2::4],vi[3::4]
+            order = self.quadface_order
+        
+        V = self.vertices
+        
+        if is_ck_n:
+            an = (V[v1]+V[v2]+V[v3]+V[v4])/4.0
+            fn = np.cross(V[v1]-V[v3], V[v2]-V[v4])
+            fn = fn / np.linalg.norm(fn, axis=1)[:,None]
+            return an, fn
+        if is_GI:
+            "below works the same as self.get_face_normal_GI"
+            all_fn = self.face_normals()
+            
+            fn = np.cross(V[v1]-V[v3], V[v2]-V[v4])
+            fn = fn / np.linalg.norm(fn, axis=1)[:,None]
+  
+            order_fn = all_fn[order]
+            dot = np.einsum('ij,ij->i',order_fn, fn)
+            idd = np.where(dot<0)[0]
+            fn[idd] = -fn[idd]
+            
+            all_fn[order] = fn
+            
+            GI = get_barycenters_mesh(self,verlist=all_fn)  
+            return GI
+        
+        P1 = (V[v1] + V[v2]) * 0.5
+        P2 = (V[v2] + V[v3]) * 0.5
+        P3 = (V[v3] + V[v4]) * 0.5
+        P4 = (V[v4] + V[v1]) * 0.5
+        ck = make_quad_mesh_pieces(P1,P2,P3,P4)
+        return ck
 
     def quadface_neighbour_star(self,boundary=True):
         """rr_quadface_tristar: [f,fi,fj]
@@ -1850,7 +1902,181 @@ class MMesh(Mesh):
         self._rr_quadface_tristar = tristar
         self._rr_quadface_4neib = np.c_[if0,if1,if2,if3,if4]
 
+    # -------------------------------------------------------------------------
+    #                       all faces / vertices
+    # -------------------------------------------------------------------------
+    def get_checker_select_vertex(self,first=[0]):
+        "self.checker_vertex: all vertex...blue ~ 0 ; red ~ 1; left ~ -1"
+        vall,vallij=self.vertex_ring_vertices_iterators(sort=True, order=False)
+        #vall,vallij = self._vi,self._vj
+        arr = -np.ones(self.V)
+        left = np.arange(self.V)
+        i0 = first       ## f0
+        arr[i0] = 0      ## blue
+        ind = np.where(vall==i0)[0]
+        ij = vallij[ind] ## fneib
+        left = np.setdiff1d(left,np.r_[i0,ij])
+        a = 0
+        while len(left)!=0:
+            a = a % 2
+            vneib=[]
+            for i in ij:
+                if i !=-1:
+                    arr[i]=1-a
+                    ind = np.where(vall==i)[0]
+                    vneib.extend(list(vallij[ind]))
+            left = np.setdiff1d(left,np.r_[ij,vneib])
+            ij=[]
+            for v in vneib:
+                if v!=-1 and arr[v]==-1:
+                    arr[v]=a
+                    ij.append(v)
+            a += 1
+        blue = np.where(arr==0)[0]
+        red = np.where(arr==1)[0]
+        self._checker_vertex = [blue,red]
 
+    
+    def get_revolution(self,is_T=False): 
+        """corresponding rotational mesh of a patch
+        v1,v,v3 from up to down; v2,v,v4 from left to right 
+             v1
+        v2   v   v4
+             v3
+        """
+        patch = self.patch_matrix.T if is_T else self.patch_matrix
+        nrow,ncol = patch[1:-1,1:-1].shape
+        ver = self.vertices
+
+        vv1 = patch[:-1,1:].flatten()
+        vv = patch[1:,1:].flatten()
+        vv2 = patch[1:,:-1].flatten()
+        VV1,VV,VV2 = ver[vv1],ver[vv],ver[vv2]
+        ll = np.linalg.norm(VV1-VV,axis=1)
+        e1 = (VV1-VV)/ll[:,None]
+        e2 = (VV2-VV)/np.linalg.norm(VV2-VV,axis=1)[:,None]
+        theta = np.arccos(np.einsum('ij,ij->i',e1,e2))
+        the = np.mean(theta.reshape(-1,ncol+1),axis=1)
+        
+        Va, Vc = ver[patch[:-1,:].flatten()], ver[patch[1:,:].flatten()]
+        lvertical = np.linalg.norm(Va-Vc,axis=1).reshape(-1,ncol+2)
+        lv_row = np.mean(lvertical,axis=1) * np.sin(the)
+
+        Vb, Vd = ver[patch[:,:-1].flatten()], ver[patch[:,1:].flatten()]
+        lhorizon = np.linalg.norm(Vb-Vd,axis=1).reshape(-1,ncol+1)
+        lh_row = np.mean(lhorizon,axis=1)
+
+        "from optimized revoluted mesh to reconstruct AIAP revolution mesh"
+        "the horizontal segments should be equal"
+        "the horizontal geodesic parallel satisfy"
+        "vertices\faces: from the first row to last"
+        vM = np.arange(self.V).reshape(-1,ncol+2)
+        newM = vM
+        r1 = newM[:-1,:-1].flatten()
+        r2 = newM[1:,:-1].flatten()
+        r3 = newM[1:,1:].flatten()
+        r4 = newM[:-1,1:].flatten()
+        facelist = (np.vstack((r1,r2,r3,r4)).T).tolist()
+
+        def points(center,r,segNum):
+            "center=[0,0,z],segNum is unique"
+            x = center[0] + r*np.cos(2*np.pi*np.arange(segNum+1)/float(segNum))
+            y = center[1] + r*np.sin(2*np.pi*np.arange(segNum+1)/float(segNum))
+            z = center[2]
+            P = np.vstack((x, y, z*np.ones(segNum+1))).T
+            return P
+
+        radius = lh_row/float(2) / np.sin(np.pi / (ncol+1))
+        height = np.sqrt(np.square(lv_row)-np.square(radius[:-1]-radius[1:]))
+        
+        POINTS = np.array([0,0,0])
+        z = 0
+        for i in range(nrow+2):
+            if i==0:
+                h=0
+            else:
+                h = height[i-1]
+            z += h
+            center=[0,0,z]
+            Pi = points(center,radius[i],ncol+1)
+            POINTS = np.vstack((POINTS,Pi))
+            
+        xmin,xmax = self.bounding_box()[0]
+        an = np.array([xmax-xmin,0,0])
+        POINTS += an
+        
+        rmesh = Mesh()
+        rmesh.make_mesh(POINTS[1:,:], facelist)
+        return POINTS[1:,:],rmesh  
+    
+    def get_distortion_from_revolution(self,is_length,is_angle,is_T=False): 
+        m1v = self.vertices 
+        _,rm = self.get_revolution(is_T=is_T)
+        patch = self.patch_matrix.T if is_T else self.patch_matrix
+        ind = []
+        arr = patch.flatten()
+        for i in range(self.V):
+            ind.append(np.where(arr==i)[0][0])
+        m2v = rm.vertices[np.array(ind)]
+        ck1,ck2,err = self.get_isometry_error_from_checkerboard_diagonal(m1v,m2v,is_length,is_angle)
+        return ck2,err
+
+    def get_isometry_error_from_checkerboard_diagonal(self,Vi,Wi,is_length=False,is_angle=False,is_area=False,is_dig_ctrl=False):
+        """two isometry deformed mesh vi, wi
+        using changes of a diagonal edge length of corresponding checkerboard faces
+        to measure isometry error
+        """
+        iv0,iv1,iv2,iv3 = self.rr_quadface.T  
+        el = self.mean_edge_length()
+        
+        d11 = np.linalg.norm(Vi[iv2]-Vi[iv0],axis=1)
+        d12 = np.linalg.norm(Vi[iv3]-Vi[iv1],axis=1)
+        d21 = np.linalg.norm(Wi[iv2]-Wi[iv0],axis=1)
+        d22 = np.linalg.norm(Wi[iv3]-Wi[iv1],axis=1)  
+        
+        if is_length:
+            "diagonal length of control face"    
+            err = (np.abs(d11-d21)+np.abs(d12-d22)) / el
+            print('\n Isometry (length) error = (np.abs(d11-d21)+np.abs(d12-d22)) / el : \n')
+
+        elif is_angle:
+            ag1 = np.einsum('ij,ij->i',Vi[iv2]-Vi[iv0],Vi[iv3]-Vi[iv1])
+            ag2 = np.einsum('ij,ij->i',Wi[iv2]-Wi[iv0],Wi[iv3]-Wi[iv1])
+            cos1 = ag1/d11/d12
+            cos2 = ag2/d21/d22
+            try:
+                err = np.abs((np.arccos(cos1)-np.arccos(cos2))*180/np.pi)
+            except:
+                err = np.zeros(len(cos1))
+                for i in range(len(cos1)):
+                    if cos1[i]>1 or cos1[i]<-1 or cos2[i]>1 or cos2[i]<-1:
+                        print(cos1[i],cos2[i])
+                        continue
+                    else:
+                        err[i] = np.abs((np.arccos(cos1[i])-np.arccos(cos2[i]))*180/np.pi)
+            print('\n Isometry (angle) error=np.abs((np.arccos(cos1)-np.arccos(cos2))*180/np.pi) : \n')
+            
+        elif is_area:
+            a1 = np.linalg.norm(np.cross(Vi[iv1]-Vi[iv0],Vi[iv3]-Vi[iv0]),axis=1)
+            a2 = np.linalg.norm(np.cross(Wi[iv1]-Wi[iv0],Wi[iv3]-Wi[iv0]),axis=1)
+            err = np.abs(a1-a2) / (el**2) / 2
+            print('\n Isometry (area) error : \n')
+
+        elif is_dig_ctrl:
+            "diagonal length of checkerboard quad"
+            d11 = np.linalg.norm((Vi[iv1]+Vi[iv0])/2-(Vi[iv2]+Vi[iv3])/2,axis=1)
+            d12 = np.linalg.norm((Vi[iv2]+Vi[iv1])/2-(Vi[iv3]+Vi[iv0])/2,axis=1)
+            d21 = np.linalg.norm((Wi[iv1]+Wi[iv0])/2-(Wi[iv2]+Wi[iv3])/2,axis=1)        
+            d22 = np.linalg.norm((Wi[iv2]+Wi[iv1])/2-(Wi[iv3]+Wi[iv0])/2,axis=1)
+            err = (np.abs(d11-d21)+np.abs(d12-d22))/2 / el
+
+        print('   max = ','%.3g' % np.max(err),'\n')
+        
+        P1,P2,P3,P4 = (Vi[iv0]+Vi[iv1])/2,(Vi[iv1]+Vi[iv2])/2,(Vi[iv2]+Vi[iv3])/2,(Vi[iv3]+Vi[iv0])/2
+        PP1,PP2,PP3,PP4 = (Wi[iv0]+Wi[iv1])/2,(Wi[iv1]+Wi[iv2])/2,(Wi[iv2]+Wi[iv3])/2,(Wi[iv3]+Wi[iv0])/2
+        ck1 = make_quad_mesh_pieces(P1,P2,P3,P4)
+        ck2 = make_quad_mesh_pieces(PP1,PP2,PP3,PP4)
+        return ck1,ck2,err
     # -------------------------------------------------------------------------
     #                        Diagonal mesh
     # -------------------------------------------------------------------------

@@ -179,13 +179,11 @@ class DOINet(GeolabComponent):
     show_midpoint_polyline2 = Bool(label='Ply2')
     show_midline_mesh = Bool(label='ReMesh')
     
-    show_checkboard_black = Bool(label='Parallelogram')
-    show_checkboard_white = Bool(label='CBP-W')
-    show_checkboard_black_GI = Bool(label='GI') 
-    
     show_diagonal_red_mesh = Bool(False,label='DiagM1')
     show_diagonal_blue_mesh = Bool(False,label='DiagM2')
     show_diagonal_mesh = Bool(False,label='DiagM')
+    
+    show_revolution = Bool(False,label='Rot')
 
     show_vs_sphere = Bool(label='VS-Sphere')
     show_snet_center = Bool(label='Snet-C')
@@ -207,11 +205,13 @@ class DOINet(GeolabComponent):
     #---------------------------------------------------------
     Group(## 1st-panel
         VGroup(
-              HGroup(Item('switch_GO_or_OG'),),    
+              HGroup(Item('switch_GO_or_OG'),
+                     Item('button_clear_constraint',show_label=False)),    
               #HGroup('orthogonal','GPC_net'),
               HGroup('DOI_net','is_DOI_SIR','is_DOI_SIR_diagKite'),
               HGroup('Kite_net','is_Kite_diagGPC','is_Kite_diagGPC_SIR'),
-              HGroup('CGC_net','Gnet','Gnet_diagnet',),
+              HGroup('CGC_net','Gnet','Gnet_diagnet',
+                     'Pseudogeodesic_net',),
               HGroup('CNC_net','Anet','Anet_diagnet',),
               # HGroup('Snet',
               #        'Snet_diagnet',
@@ -219,8 +219,6 @@ class DOINet(GeolabComponent):
               #        'Snet_constR',
               #        Item('if_uniqR',show_label=False),
               #        'Snet_constR_assigned'),
-              HGroup('Pseudogeodesic_net',
-                     Item('button_clear_constraint',show_label=False)),
 
               HGroup(Item('button_align_diagKite',show_label=False),
                      Item('button_align_ctrlKite',show_label=False),
@@ -240,12 +238,10 @@ class DOINet(GeolabComponent):
                       'show_midpoint_polyline1',
                       'show_midpoint_polyline2',
                       'show_midline_mesh'),
-              HGroup('show_checkboard_black',
-                     'show_diagonal_red_mesh',
+              HGroup('show_diagonal_red_mesh',
                      'show_diagonal_blue_mesh',
                      'show_diagonal_mesh',
-                     'show_checkboard_white',
-                     #'show_checkboard_black_GI',
+                     'show_revolution',
                      ),
               HGroup('show_vs_sphere',
                      'show_snet_center',
@@ -308,10 +304,11 @@ class DOINet(GeolabComponent):
                       'glide_2nd_bdry',
                       'glide_3rd_bdry',
                       'glide_4th_bdry',
-                      'glide_5th_bdry',
-                      'glide_6th_bdry',
-                      'glide_7th_bdry',
-                      'glide_8th_bdry',),
+                      # 'glide_5th_bdry',
+                      # 'glide_6th_bdry',
+                      # 'glide_7th_bdry',
+                      # 'glide_8th_bdry',
+                      ),
                HGroup('show_corner',
                       'sharp_corner'),
                show_border=True,label='Closeness'),
@@ -955,8 +952,8 @@ class DOINet(GeolabComponent):
     @on_trait_change('button_align_diagKite')
     def set_align_diagKite(self): 
         self.DOI_net = True
-        self.is_DOI_SIR_net = True
-        self.is_DOI_SIR_diagKite_net = True
+        self.is_DOI_SIR = True
+        self.is_DOI_SIR_diagKite = True
 
     @on_trait_change('button_align_ctrlKite')
     def set_align_ctrlKite(self): 
@@ -966,20 +963,23 @@ class DOINet(GeolabComponent):
 
     @on_trait_change('button_align_CGC') #TODO
     def set_align_CGC(self): 
-        self.is_DOI_SIR_net = True
-        self.is_DOI_SIR_diagKite_net = True
+        self.DOI_net = True
+        self.is_DOI_SIR = True
+        self.is_DOI_SIR_diagKite = True
         self.CGC_net = True
 
     @on_trait_change('button_align_CNC') #TODO
     def set_align_CNC(self): 
-        self.is_DOI_SIR_net = True
-        self.is_DOI_SIR_diagKite_net = True
+        self.DOI_net = True
+        self.is_DOI_SIR = True
+        self.is_DOI_SIR_diagKite = True
         self.CNC_net = True
 
     @on_trait_change('button_align_Pnet') #TODO
     def set_align_Pnet(self): 
-        self.is_DOI_SIR_net = True
-        self.is_DOI_SIR_diagKite_net = True
+        self.DOI_net = True
+        self.is_DOI_SIR = True
+        self.is_DOI_SIR_diagKite = True
         self.Pseudogeodesic_net = True
 
     @on_trait_change('switch_GO_or_OG')
@@ -1048,55 +1048,6 @@ class DOINet(GeolabComponent):
         else:
             self.meshmanager.remove([name+'e',name+'f'])   
             
-            
-    @on_trait_change('show_checkboard_black')
-    def plot_checkboard_black(self):
-        name = 'ckb'
-        if self.show_checkboard_black:
-            ck = self.mesh.get_checkboard_black(is_rr=True)
-            lamda,mu = self.mesh.get_quad_parallelogram_similarity()
-            data = lamda/mu
-            print('lamda:[min,mean,max]=','%.3f'%np.min(lamda),'%.3f'%np.mean(lamda),'%.3f'%np.max(lamda))
-            print('mu:[min,mean,max]=','%.3f'%np.min(mu),'%.3f'%np.mean(mu),'%.3f'%np.max(mu))
-            print('lamda/mu:[min,mean,max]=','%.3f'%np.min(data),'%.3f'%np.mean(data),'%.3f'%np.max(data))
-            
-            showf = Faces(ck,faces_data=data,opacity=0.5,
-                          color='brg',lut_range = [0,np.max(data)*1.1], ##change range
-                          name=name)
-            self.meshmanager.add(showf)
-            self.save_new_mesh = ck
-            self.label = name
-        else:
-            self.meshmanager.remove(name)
-
-    @on_trait_change('show_checkboard_white')
-    def plot_checkboard_white(self):
-        name = 'ckw'
-        if self.show_checkboard_white:
-            ck = self.mesh.get_checkboard_white()
-            self.save_new_mesh = ck
-            self.label = name
-            showf = Faces(ck,color ='w',name=name)
-            self.meshmanager.add(showf)
-        else:
-            self.meshmanager.remove(name)
-
-    @on_trait_change('show_checkboard_black_GI')
-    def plot_checkboard_black_GI(self):
-        name = 'ckb_GI'
-        if self.show_checkboard_black_GI:
-            GI = self.mesh.get_checkboard_black(is_GI=True)
-            #showf = Faces(GI,color = (8,45,130),opacity=0.5,name=name)##NOTE:OPACITY
-            showe = Edges(GI,color='black',name=name+'e')
-            self.meshmanager.add(showe)
-            self.meshmanager.plot_glyph(points=GI.vertices,radius=2*self.meshmanager.r,
-                                        color='black',name=name+'v')
-            
-            self.save_new_mesh = GI
-            self.label = name
-        else:
-            self.meshmanager.remove([name,name+'e',name+'v'])
-            
     @on_trait_change('show_diagonal_red_mesh')
     def plot_diagonal_red_mesh(self):
         name = 'dmesh1'
@@ -1151,6 +1102,22 @@ class DOINet(GeolabComponent):
         else:
             self.meshmanager.remove([name+'e',name+'f'])               
 
+
+    @on_trait_change('show_revolution')
+    def plot_rotational_mesh_from_a_patch(self):
+        name = 'rot'
+        if self.show_revolution:
+            pi,rm = self.mesh.get_revolution(self.switch_GO_or_OG)    
+            showe = Edges(rm,color ='black',name=name+'e')
+            #showf = Faces(rm,color ='white',name=name+'f')
+            ck,err = self.mesh.get_distortion_from_revolution(is_length=True,is_angle=False)
+            showf = Faces(ck,face_data=err,glossy=1,opacity=0.7,
+                          color='bwr',lut_range='-:0:+',name=name) 
+            self.meshmanager.add([showe,showf])
+            self.save_new_mesh = rm
+            self.label = name
+        else:
+            self.meshmanager.remove([name+'e',name+'f'])
     #---------------------------------------------------------        
     #               Anet / Snet - Ploting
     #---------------------------------------------------------

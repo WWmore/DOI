@@ -17,7 +17,7 @@ from archgeolab.constraints.constraints_fairness import con_fairness_4th_differe
 
 from archgeolab.constraints.constraints_net import con_unit_edge,\
     con_orthogonal_midline,con_anet,con_anet_diagnet,con_snet,\
-    con_snet_diagnet,con_doi,con_doi__freeform,con_kite #con_kite_diagnet
+    con_snet_diagnet,con_doi,con_doi__freeform,con_kite
     #,con_cgc,con_pnet
 
 from archgeolab.constraints.constraints_glide import con_glide_in_plane,\
@@ -535,13 +535,13 @@ class GP_DOINet(GuidedProjectionBase):
                 H,r = con_doi(self.is_GO_or_OG,yes1,**self.weights)
             self.add_iterative_constraint(H, r, 'DOI')
             
-        #if self.get_weight('Kite_diagnet'): #Hui: works but not use in alignnet on SIR-net
-            #H,r = con_kite_diagnet(**self.weights)
-            #self.add_iterative_constraint(H, r, 'Kite_diagnet')
         if self.get_weight('Kite'):
             yes1,yes2 = self.is_Kite_diagGPC, self.is_Kite_diagGPC_SIR
-            H,r = con_kite(yes1,yes2,**self.weights)
+            H,r = con_kite(self.is_GO_or_OG,yes1,yes2,**self.weights)
             self.add_iterative_constraint(H, r, 'Kite')
+        #elif self.get_weight('Kite_diagnet'): #Hui: works but not use in alignnet on SIR-net
+            #H,r = con_kite_diagnet(self.is_GO_or_OG,**self.weights)
+            #self.add_iterative_constraint(H, r, 'Kite_diagnet')
             
             
         if self.get_weight('Anet'):
