@@ -7,6 +7,8 @@ Created on Sun Dec 18 22:16:21 2022
 __author__ = 'Hui Wang'
 #------------------------------------------------------------------------------
 import numpy as np
+
+import itertools
 #------------------------------------------------------------------------------
 from geometrylab.geometry.meshpy import Mesh
 
@@ -59,6 +61,12 @@ class MMesh(Mesh):
         
         self._all_rr_polylist,self._all_rr_diag_polylist = None,None
         self._all_rr_continuous_polylist = None
+        self._all_rr_polylines_vnum_arr = None
+        self._all_rr_polylines_v_vstar_order = None
+        self._all_rr_diag_polylines_v_vstar_order = None
+        self._all_rr_polylines_num = None
+        self._all_rr_polylines_vstar_order = None
+        self._all_rr_diag_polylines_vstar_order = None
         
         self._ver_bod_valence3_neib = None
         self._ver_inn_valence3_neib = None
@@ -203,6 +211,13 @@ class MMesh(Mesh):
         return self._all_rr_polylist
     ### [vlist1,[vllist1,vrlist1],[innlist1,iinnlist1],[vstart1,vend1] ];
     ### [vlist2,[vllist2,vrlist2],[innlist2,iinnlist2],[vstart2,vend2] ]
+    
+    @property
+    def all_rr_diag_polylist(self):
+        if self._all_rr_diag_polylist is None:
+            self._all_rr_diag_polylist = self.get_rregular_split_list_for_polysegmnet(diag=True)
+        return self._all_rr_diag_polylist
+    
     @property
     def all_rr_continuous_polylist(self):
         "no bdry-polyline but bdry-vertices,which are not regular"
@@ -235,13 +250,118 @@ class MMesh(Mesh):
            ## print(list1[0], list2[0]) ##loop[49,50;53,...,47;49,50]
         return self._all_rr_continuous_polylist  
 
-    ### diagonal polylinelist
     @property
-    def all_rr_diag_polylist(self):
-        if self._all_rr_diag_polylist is None:
-            self._all_rr_diag_polylist = self.get_rregular_split_list_for_polysegmnet(diag=True)
-        return self._all_rr_diag_polylist
+    def all_rr_polylines_num(self):
+        "number of polylines"
+        if self._all_rr_polylines_num is None:
+            one,another = self.all_rr_continuous_polylist
+            num13,num24 = len(one),len(another)
+            self._all_rr_polylines_num = [num13, num24]
+        return self._all_rr_polylines_num
+    
+    @property
+    def all_rr_polylines_vnum_arr(self):
+        "except boundary vertices,which are not regular"
+        "sum_crossReference(arr13,arr24) = num_allVertcies"
+        if self._all_rr_polylines_vnum_arr is None:
+            rrv = self.ver_rrv4f4
+            one,another = self.all_rr_continuous_polylist
+            arr13,arr24 = [],[]
+            for ilist in one:
+                num = 0
+                for i in ilist:
+                    if i in rrv:
+                        num += 1
+                arr13.append(num)
+            for ilist in another:
+                num = 0
+                for i in ilist:
+                    if i in rrv:
+                        num += 1
+                arr24.append(num)
+            arr13 = np.array(arr13,dtype=int)
+            arr24 = np.array(arr24,dtype=int)
+            self._all_rr_polylines_vnum_arr = [arr13, arr24]
+        return self._all_rr_polylines_vnum_arr  
 
+    @property
+    def all_rr_polylines_v_vstar_order(self):
+        "return: poly-crv-v in vstar"
+        if self._all_rr_polylines_v_vstar_order is None:
+            rrv = self.ver_rrv4f4
+            one,another = self.all_rr_continuous_polylist
+            crv1 = np.array(list(itertools.chain(*one)))
+            crv2 = np.array(list(itertools.chain(*another)))
+            def get_crv_in_vstar_order(v, crv):
+                index = []
+                for i in crv:
+                    if i in rrv:
+                        index.append(np.where(rrv==i)[0][0])
+                return np.array(index)
+            index13 = get_crv_in_vstar_order(rrv, crv1)
+            index24 = get_crv_in_vstar_order(rrv, crv2)
+            self._all_rr_polylines_v_vstar_order = [index13, index24]
+        return self._all_rr_polylines_v_vstar_order
+
+    @property
+    def all_rr_diag_polylines_v_vstar_order(self):
+        "return: poly-crv-v in vstar_diag"
+        if self._all_rr_diag_polylines_v_vstar_order is None:
+            rrv = self.ver_rrv4f4
+            one,another = self.all_rr_continuous_diag_polylist
+            crv1 = np.array(list(itertools.chain(*one)))
+            crv2 = np.array(list(itertools.chain(*another)))
+            def get_crv_in_vstar_order(v, crv):
+                index = []
+                for i in crv:
+                    if i in rrv:
+                        index.append(np.where(rrv==i)[0][0])
+                return np.array(index)
+            index13 = get_crv_in_vstar_order(rrv, crv1)
+            index24 = get_crv_in_vstar_order(rrv, crv2)
+            self._all_rr_diag_polylines_v_vstar_order = [index13, index24]
+        return self._all_rr_diag_polylines_v_vstar_order      
+
+    @property
+    def all_rr_polylines_vstar_order(self):
+        "return: rr-vstar v in which polyline"
+        if self._all_rr_polylines_vstar_order is None:
+            one,another = self.all_rr_continuous_polylist
+            rrv = self.ver_rrv4f4
+            def get_vstar_order_incrv(one):
+                "one~cos; vstar~cos[ind]"
+                index = []
+                for i in rrv:
+                    for j, ilist in enumerate(one):
+                        if i in ilist:
+                            index.append(j)
+                            break
+                return np.array(index)        
+            index13 = get_vstar_order_incrv(one)
+            index24 = get_vstar_order_incrv(another)
+            self._all_rr_polylines_vstar_order = [index13, index24]
+        return self._all_rr_polylines_vstar_order
+    
+    @property
+    def all_rr_diag_polylines_vstar_order(self):
+        "return: rr-vstar v in which polyline"
+        if self._all_rr_diag_polylines_vstar_order is None:
+            one,another = self.all_rr_continuous_diag_polylist
+            rrv = self.ver_rrv4f4
+            def get_vstar_order_incrv(one):
+                "one~cos; vstar~cos[ind]"
+                index = []
+                for i in rrv:
+                    for j, ilist in enumerate(one):
+                        if i in ilist:
+                            index.append(j)
+                            break
+                return np.array(index)        
+            index13 = get_vstar_order_incrv(one)
+            index24 = get_vstar_order_incrv(another)
+            self._all_rr_diag_polylines_vstar_order = [index13, index24]
+        return self._all_rr_diag_polylines_vstar_order    
+ 
     @property
     def ver_regular_star(self):
         if self.angle == 90:
@@ -2531,6 +2651,98 @@ class MMesh(Mesh):
         print('----------------------------------')
         #return np.max(A),np.min(A),np.mean(A),np.median(A)
 
+    def get_isoline_osculating_normal(self,is_diag=False,
+                                      is_all_n=False,is_n=False,is_on=False):
+        V = self.vertices
+        
+        if is_all_n:
+            alln = self.vertex_normals()
+            return V, alln
+
+        elif is_n:
+            v = self.ver_rrv4f4
+            an = V[v]
+            n = self.vertex_normals()[v]
+            return an,n
+        
+        elif is_on:
+            if is_diag:
+                v13lcr,v24lcr = self.all_rr_diag_polylist_lcr
+            else:
+                v13lcr,v24lcr = self.all_rr_polylist_lcr
+            def get_on(vlcr):
+                vl = list(itertools.chain(*vlcr[0]))
+                vc = list(itertools.chain(*vlcr[1]))
+                vr = list(itertools.chain(*vlcr[2]))
+                on = np.cross(V[vl]-V[vc], V[vr]-V[vc])
+                on = on / np.linalg.norm(on,axis=1)[:,None]
+                return on
+            an1 = V[list(itertools.chain(*v13lcr[1]))]
+            on1 = get_on(v13lcr)
+            an2 = V[list(itertools.chain(*v24lcr[1]))]
+            on2 = get_on(v24lcr)
+            return an1,on1,an2,on2
+    
+    def get_cos_sin_angle(self,vlist,alloN=None,is_rrv4list=True):
+        V = self.vertices
+        N = self.vertex_normals()
+        vN = self.get_v4_orient_unit_normal()[1]
+        N[self.ver_rrv4f4] = vN
+        
+        arr = brr = np.array([])
+        for ilist in vlist:
+            vl,vc,vr = np.array(ilist[:-2]),np.array(ilist[1:-1]),np.array(ilist[2:])
+            if is_rrv4list:
+                sect,ivc,irrv = np.intersect1d(vc,self.ver_rrv4f4,return_indices=True)
+                if len(ivc)!=0:
+                    wl,wc,wr = vl[ivc],vc[ivc],vr[ivc]
+                    if alloN is None:
+                        on = np.cross(V[wl]-V[wc], V[wr]-V[wc])
+                        oN = on / np.linalg.norm(on,axis=1)[:,None]
+                    else:
+                        oN = alloN[wc]
+                    "note: there is no orientation for oN,then vn*on have different signs"
+                    #cos = np.mean(np.abs(np.einsum('ij,ij->i',N[wc],oN))) ##always positive, may have problem for tu-case
+                    cos = np.mean(np.einsum('ij,ij->i',N[wc],oN)) ##need to check if abs or not
+                    arr = np.r_[arr,cos]
+                    e1 = (V[wl]-V[wc]) / np.linalg.norm(V[wl]-V[wc],axis=1)[:,None]
+                    e3 = (V[wr]-V[wc]) / np.linalg.norm(V[wr]-V[wc],axis=1)[:,None]
+                    T = (e1-e3) / np.linalg.norm(e1-e3,axis=1)[:,None]
+                    U = np.cross(N[wc],T) / np.linalg.norm(np.cross(N[wc],T),axis=1)[:,None]
+                    sin = np.mean(np.abs(np.einsum('ij,ij->i',U,oN)))
+                    brr = np.r_[brr,sin]
+        return arr,brr
+    
+    def get_isoline_normal_binormal_angles(self,is_diag=False,
+                                           assign=None,entire=False):
+        "for each polyline: cos:=np.mean(np.einsum('ij,ij->i',vN,oN))"
+        N = self.vertex_normals()
+        alloN1=alloN2 = None
+        if assign is not None:
+            v,vN,oN1,oN2 = assign
+            N[v] = vN
+            alloN1 = alloN2 = N#np.zeros((self.V,3))
+            alloN1[v],alloN2[v] = oN1,oN2
+        if entire:
+            if is_diag:
+                v13lcr,v24lcr = self.all_rr_diag_polylist_lcr
+            else:
+                v13lcr,v24lcr = self.all_rr_polylist_lcr
+            an13 = list(itertools.chain(*v13lcr[1]))
+            an24 = list(itertools.chain(*v24lcr[1]))
+            vN = N[np.r_[an13,an24]]
+            _,on1,_,on2 = self.get_isoline_osculating_normal(is_diag,is_on=True)
+            oN = np.vstack((on1,on2))
+            cos = np.einsum('ij,ij->i',vN,oN)
+            return cos
+        else:
+            if is_diag:
+                one,another = self.all_rr_continuous_diag_polylist
+            else:
+                one,another = self.all_rr_continuous_polylist
+            cos13,sin13 = self.get_cos_sin_angle(one,alloN1)
+            cos24,sin24 = self.get_cos_sin_angle(another,alloN2)
+            return [cos13, sin13], [cos24, sin24]
     # -------------------------------------------------------------------------
     #                     Discrete Differential Geometry
     # -------------------------------------------------------------------------

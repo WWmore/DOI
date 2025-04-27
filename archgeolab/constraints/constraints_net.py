@@ -13,7 +13,10 @@ from scipy import sparse
 from archgeolab.constraints.constraints_basic import column3D,con_edge,\
     con_unit,con_constl,con_equal_length,con_symmetry,\
     con_planarity,con_unit_normal,con_orient,con_diagonal,\
-    con_equal_opposite_angle,con_dependent_vector
+    con_equal_opposite_angle,con_dependent_vector,\
+    con_constangle2,con_constangle3,con_constangle4,con_positive,con_negative,\
+    con_orient,con_orient1,con_orient2,con_ortho,con_orthogonal_2vectors,\
+    con_diagonal2,con_circle
 # -------------------------------------------------------------------------
 """
 from archgeolab.constraints.constraints_net import 
@@ -464,43 +467,12 @@ def con_kite_diagnet(is_transpose=False,**kwargs):
     return H*w,r*w
 
     
-def con_CGC(is_diag=False,is_rrvstar=False,**kwargs):
-    """CGC_net: net curves of constant geodesic curvature, kg1=|kg2|=const.
 
-    """
-    w = kwargs.get('CGC')
-    mesh = kwargs.get('mesh')
-    X = kwargs.get('X')
-    N = kwargs.get('N')
-    V = mesh.V
-    
-    if is_rrvstar:
-        if is_diag:
-            w = kwargs.get('CGC_diagnet')
-            v0,v1,v2,v3,v4 = mesh.rr_star_corner
-        else:
-            v0,v1,v2,v3,v4 = mesh.rrv4f4
-    else:
-        v0,v1,v2,v3,v4 = mesh.rr_star.T
-    numv = len(v0) ##print(numv,mesh.num_rrv4f4)
-    c_v0 = column3D(v0,0,V)
-    c_v1 = column3D(v1,0,V)
-    c_v2 = column3D(v2,0,V)
-    c_v3 = column3D(v3,0,V)
-    c_v4 = column3D(v4,0,V)
-    arr1 = np.arange(numv)
-    arr3 = np.arange(3*numv)   
     
     
-def con_CNC(is_rr=False,**kwargs):
-    """CNC_net: net curves of constant normal curvature, kn1=kn2=const.
-        = S-net + constant radius 
 
-    """
     
-def con_Pnet(is_diag=False,is_rrvstar=False,**kwargs):
-    """Pnet: pseudo-geodesic net: kg/kn=const.
-    """
+
 
 def con_gonet(rregular=False,is_direction24=False,**kwargs):
     """ paper: <Discrete GEODESIC PARALLEL COORDINATES>-SIGGRAPH ASIA 2019
@@ -577,74 +549,82 @@ def con_dgpc(rregular=False,polyline_direction=False,**kwargs):
     H,r = con_diagonal(X,c_vi,c_vj,c_l,nrow*(ncol-1))
     return H*w,r*w
 
+
     #--------------------------------------------------------------------------
-    #                       A-net:
-    #-------------------------------------------------------------------------- 
-def _con_anet(X,w,c_n,c_v,c_v1,c_v2,c_v3,c_v4):
-    "vn*(vi-v)=0; vn**2=1"
-    H1,r1 = con_planarity(X,c_v,c_v1,c_n)
-    H2,r2 = con_planarity(X,c_v,c_v2,c_n)
-    H3,r3 = con_planarity(X,c_v,c_v3,c_n)
-    H4,r4 = con_planarity(X,c_v,c_v4,c_n)
-    Hn,rn = con_unit(X,c_n)
-    H = sparse.vstack((H1,H2,H3,H4,Hn))
-    r = np.r_[r1,r2,r3,r4,rn]
-    return H*w, r*w
-    
-def con_anet(rregular=False,**kwargs):
-    """ based on con_unit_edge()
-    X += [ni]
-    ni * (vij - vi) = 0
+    #                      CGC / G-net:
+    #--------------------------------------------------------------------------  
+def con_CGC(is_diagnet=False,is_rrvstar=False,**kwargs):
+    """CGC_net: net curves of constant geodesic curvature, kg1=|kg2|=const.
+
     """
-    w = kwargs.get('Anet')
+    w = kwargs.get('CGC')
     mesh = kwargs.get('mesh')
     X = kwargs.get('X')
+    N = kwargs.get('N')
+    V = mesh.V
     
-    Nanet = kwargs.get('Nanet')
+    if is_rrvstar:
+        if is_diagnet:
+            w = kwargs.get('CGC_diagnet')
+            v0,v1,v2,v3,v4 = mesh.rr_star_corner
+        else:
+            v0,v1,v2,v3,v4 = mesh.rrv4f4
+    else:
+        v0,v1,v2,v3,v4 = mesh.rr_star.T
+    numv = len(v0) ##print(numv,mesh.num_rrv4f4)
+    c_v0 = column3D(v0,0,V)
+    c_v1 = column3D(v1,0,V)
+    c_v2 = column3D(v2,0,V)
+    c_v3 = column3D(v3,0,V)
+    c_v4 = column3D(v4,0,V)
+    arr1 = np.arange(numv)
+    arr3 = np.arange(3*numv)   
+
+def _con_gnet(X,w,c_ue1,c_ue2,c_ue3,c_ue4):
+    H1,r1 = con_equal_opposite_angle(X,c_ue1,c_ue2,c_ue3,c_ue4)
+    H2,r2 = con_equal_opposite_angle(X,c_ue2,c_ue3,c_ue4,c_ue1)
+    H, r = sparse.vstack((H1, H2)), np.r_[r1,r2]
+    return H*w, r*w
+
+def con_gnet(rregular=True,is_diagnet=False,**kwargs):
+    """
+    Gnet: based on con_unit_edge(diag=False)
+    Gnet_diagnet: based on con_unit_edge(diag=True)
+    e1*e2-e3*e4=0; e2*e3-e1*e4=0
+    """
+    if is_diagnet:
+        w = kwargs.get('Gnet_diagnet')
+    else:
+        w = kwargs.get('Gnet')
+        
+    mesh = kwargs.get('mesh')
+    X = kwargs.get('X')
+    N5 = kwargs.get('N5')
     
     if rregular:
-        v,v1,v2,v3,v4 = mesh.rrv4f4
+        "function same as below:con_gnet_diagnet"
         num=mesh.num_rrv4f4
     else:
         num = mesh.num_regular
-        v,v1,v2,v3,v4 = mesh.ver_regular_star.T
-        
-    c_n = Nanet-3*num+np.arange(3*num)
-    c_v  = column3D(v ,0,mesh.V)
-    c_v1 = column3D(v1,0,mesh.V)
-    c_v2 = column3D(v2,0,mesh.V)
-    c_v3 = column3D(v3,0,mesh.V)
-    c_v4 = column3D(v4,0,mesh.V)
-    
-    H,r = _con_anet(X,w,c_n,c_v,c_v1,c_v2,c_v3,c_v4)
-    return H,r
-     
-def con_anet_diagnet(**kwargs):
-    "based on con_unit_edge(diag=True); X += [ni]; ni * (vij - vi) = 0"
-    w = kwargs.get('Anet_diagnet')
-    mesh = kwargs.get('mesh')
-    X = kwargs.get('X')
-    Nanet = kwargs.get('Nanet')
-    
-    #c_v,c_v1,c_v2,c_v3,c_v4 = mesh.get_vs_diagonal_v(index=False)
-    v,v1,v2,v3,v4 = mesh.rr_star_corner
-    c_v  = column3D(v ,0,mesh.V)
-    c_v1 = column3D(v1,0,mesh.V)
-    c_v2 = column3D(v2,0,mesh.V)
-    c_v3 = column3D(v3,0,mesh.V)
-    c_v4 = column3D(v4,0,mesh.V)
-    
-    num = int(len(c_v)/3)
-    c_n = Nanet-3*num+np.arange(3*num)
-
-    H,r = _con_anet(X,w,c_n,c_v,c_v1,c_v2,c_v3,c_v4)
+    arr = np.arange(num)
+    c_ue1 = column3D(arr,N5-12*num,num)
+    c_ue2 = column3D(arr,N5-9*num,num)
+    c_ue3 = column3D(arr,N5-6*num,num)
+    c_ue4 = column3D(arr,N5-3*num,num)     
+    H,r = _con_gnet(X,w,c_ue1,c_ue2,c_ue3,c_ue4)
     return H,r
 
 
     #--------------------------------------------------------------------------
-    #                       S-net:
+    #                       CNC / S-net / Anet :
     #--------------------------------------------------------------------------  
-def con_snet(orientrn,is_rrvstar=True,is_diagmesh=False,
+    
+def con_CNC(is_rr=False,**kwargs):
+    """CNC_net: net curves of constant normal curvature, kn1=kn2=const.
+        = S-net + constant radius 
+    refer to : con_snet(is_uniqR=True)
+    """
+def con_snet(orientrn,is_rrvstar=True,is_diagnet=False,
              is_uniqR=False,assigned_r=None,**kwargs):
     """a(x^2+y^2+z^2)+(bx+cy+dz)+e=0 ; normalize: F^2 = b^2+c^2+d^2-4ae=1
     sphere center C:= (m1,m2,m3) = -(b, c, d) /a/2
@@ -653,25 +633,26 @@ def con_snet(orientrn,is_rrvstar=True,is_diagmesh=False,
     since P(Vx,Vy,Vz) satisfy the sphere eq. and the normalizated eq., so that
         N ^2=1
     """
-    w = kwargs.get('Snet')
     Nsnet = kwargs.get('Nsnet')
     mesh = kwargs.get('mesh')
     X = kwargs.get('X')
     N = kwargs.get('N')
     V = mesh.V
 
-    if is_rrvstar:
+    if is_rrvstar:  ##default=True
         "new for SSGweb-project"
-        if is_diagmesh:
+        if is_diagnet:
             w = kwargs.get('Snet_diagnet')
             v0,v1,v2,v3,v4 = mesh.rr_star_corner
         else:
+            w = kwargs.get('Snet')
             v0,v1,v2,v3,v4 = mesh.rrv4f4
         #orientrn = orientrn[mesh.ind_rr_star_v4f4] ##below should be the same
         ##print(len(mesh.ind_rr_star_v4f4),len(v0))
     else:
         "used in CRPC"
         v0,v1,v2,v3,v4 = mesh.rr_star.T
+    
     numv = len(v0) ##print(numv,mesh.num_rrv4f4)
     c_v0 = column3D(v0,0,V)
     c_v1 = column3D(v1,0,V)
@@ -838,249 +819,317 @@ def con_snet(orientrn,is_rrvstar=True,is_diagmesh=False,
 
     return H*w,r*w
 
-def con_snet_diagnet(orientrn,**kwargs):
-    w = kwargs.get('Snet_diagnet')
+
+def con_anet(rregular=False,is_diagnet=False,**kwargs):
+    """ based on con_unit_edge()
+    X += [ni]
+    ni * (vij - vi) = 0
+    """
+    if is_diagnet:
+        w = kwargs.get('Anet_diagnet')
+    else:
+        w = kwargs.get('Anet')
+    mesh = kwargs.get('mesh')
+    X = kwargs.get('X')
+    
+    Nanet = kwargs.get('Nanet')
+    
+    if is_diagnet:
+        "based on con_unit_edge(diag=True); X += [ni]; ni * (vij - vi) = 0"
+        v,v1,v2,v3,v4 = mesh.rr_star_corner
+    else:
+        if rregular:
+            v,v1,v2,v3,v4 = mesh.rrv4f4
+            #num=mesh.num_rrv4f4
+        else:
+            #num = mesh.num_regular
+            v,v1,v2,v3,v4 = mesh.ver_regular_star.T
+    
+    num = len(v)
+    c_n = Nanet-3*num+np.arange(3*num)
+    c_v  = column3D(v ,0,mesh.V)
+    c_v1 = column3D(v1,0,mesh.V)
+    c_v2 = column3D(v2,0,mesh.V)
+    c_v3 = column3D(v3,0,mesh.V)
+    c_v4 = column3D(v4,0,mesh.V)
+    
+    def _con_anet(X,w,c_n,c_v,c_v1,c_v2,c_v3,c_v4):
+        "vn*(vi-v)=0; vn**2=1"
+        H1,r1 = con_planarity(X,c_v,c_v1,c_n)
+        H2,r2 = con_planarity(X,c_v,c_v2,c_n)
+        H3,r3 = con_planarity(X,c_v,c_v3,c_n)
+        H4,r4 = con_planarity(X,c_v,c_v4,c_n)
+        Hn,rn = con_unit(X,c_n)
+        H = sparse.vstack((H1,H2,H3,H4,Hn))
+        r = np.r_[r1,r2,r3,r4,rn]
+        return H*w, r*w
+    
+    H,r = _con_anet(X,w,c_n,c_v,c_v1,c_v2,c_v3,c_v4)
+    return H,r
+
+    #--------------------------------------------------------------------------
+    #                       P-net:
+    #--------------------------------------------------------------------------  
+
+def con_Pnet(is_diag=False,is_rrvstar=False,**kwargs):
+    """Pnet: pseudo-geodesic net: kg/kn=const.
+    """
+    
+def con_pseudogeodesic_pattern(name,is_orient=False,
+                               is_aotu=False,
+                               is_pq=False,
+                               is_dev=False,
+                               is_unique_angle=False,
+                               coss=None,
+                               is_unique_width=False,
+                               is_const_width=False,
+                               width=None,
+                               **kwargs):
+    """ based on self.orient_rr_vn=True: X +=[vN,a]
+            unit vN://(e1-e3) x (e2-e4); vN*Nv=a^2
+            <==> [vN*(e1-e3)=0; vN*(e2-e4)=0; vn^2=1;vN*Nv=a^2]
+            
+    X=+[oN1; cos1; a,b; width; pn; xy]
+        osculating_pln_normal=binormal: on:// (v1-v) x (v3-v)
+        <==> on*(v1-v)=0; on*(v3-v)=0; on^2=1; vn * on = cos
+      
+    "len(cos)==len(a)==numpl; len(on)==len(n)==len(b)==num_rrv4f4"
+    
+    if orient (orient with vN  & polyline-direction): 
+         cos = a^2; on*(vNxt2)=b^2 ####on*(e2-e4)=b^2.
+         if aotu: 
+             on[ao]*(e2[ao]-e4[ao]) = b[ao]^2
+             on[tu]*(e2[tu]-e4[tu]) = b[tu]^2
+             
+             
+    """ 
     mesh = kwargs.get('mesh')
     X = kwargs.get('X')
     N = kwargs.get('N')
-    Nsnet = kwargs.get('Nsnet')
-    
-    V = mesh.V
-    numv = mesh.num_rrv4f4
-    arr1 = np.arange(numv)
-    arr3 = np.arange(3*numv)
-    
-    #c_v,c_cen1,c_cen2,c_cen3,c_cen4 = mesh.get_vs_diagonal_v(ck1=ck1,ck2=ck2,index=False)
-    v,v1,v2,v3,v4 = mesh.rr_star_corner
-    c_v = column3D(v,0,V)
-    c_cen1 = column3D(v1,0,V)
-    c_cen2 = column3D(v2,0,V)
-    c_cen3 = column3D(v3,0,V)
-    c_cen4 = column3D(v4,0,V)
-    c_cen = [c_cen1,c_cen2,c_cen3,c_cen4]
-    _n1 = Nsnet-11*numv
-    c_squ, c_a = _n1+np.arange(5*numv),_n1+5*numv+arr1
-    c_b,c_c,c_d,c_e = c_a+numv,c_a+2*numv,c_a+3*numv,c_a+4*numv
-    c_a_sqr = c_a+5*numv
-
-    def _con_v_square(c_v,c_cen,c_squ):
-        "[v;c1,c2,c3,c4]=[x,y,z], X[c_squ]=x^2+y^2+z^2"
-        c_cen1,c_cen2,c_cen3,c_cen4 = c_cen
-        row_v = np.tile(arr1,3)
-        row_1 = row_v+numv
-        row_2 = row_v+2*numv
-        row_3 = row_v+3*numv
-        row_4 = row_v+4*numv
-        row = np.r_[row_v,row_1,row_2,row_3,row_4,np.arange(5*numv)]
-        col = np.r_[c_v,c_cen1,c_cen2,c_cen3,c_cen4,c_squ]
-        dv = 2*np.r_[X[c_v]]
-        d1 = 2*np.r_[X[c_cen1]]
-        d2 = 2*np.r_[X[c_cen2]]
-        d3 = 2*np.r_[X[c_cen3]]
-        d4 = 2*np.r_[X[c_cen4]]
-        data = np.r_[dv,d1,d2,d3,d4,-np.ones(5*numv)]
-        H = sparse.coo_matrix((data,(row,col)), shape=(5*numv, N))
-        def xyz(c_i):
-            c_x = c_i[:numv]
-            c_y = c_i[numv:2*numv]
-            c_z = c_i[2*numv:]
-            return np.r_[X[c_x]**2+X[c_y]**2+X[c_z]**2]
-        r = np.r_[xyz(c_v),xyz(c_cen1),xyz(c_cen2),xyz(c_cen3),xyz(c_cen4)]
-        return H,r
-    
-    def _con_pos_a(c_a,c_a_sqr):
-        "a>=0 <---> a_sqr^2 - a = 0"
-        row = np.tile(arr1,2)
-        col = np.r_[c_a_sqr, c_a]
-        data = np.r_[2*X[c_a_sqr], -np.ones(numv)]
-        r = X[c_a_sqr]**2
-        H = sparse.coo_matrix((data,(row,col)), shape=(numv, N))
-        return H,r
-    
-    def _con_sphere_normalization(c_a,c_b,c_c,c_d,c_e):
-        """normalize the sphere equation,
-        convinent for computing/represent distance\normals
-        ||df|| = b^2+c^2+d^2-4ae=1
-        """
-        row = np.tile(arr1,5)
-        col = np.r_[c_a,c_b,c_c,c_d,c_e]
-        data = 2*np.r_[-2*X[c_e],X[c_b],X[c_c],X[c_d],-2*X[c_a]]
-        r = X[c_b]**2+X[c_c]**2+X[c_d]**2-4*X[c_a]*X[c_e]+np.ones(numv)
-        H = sparse.coo_matrix((data,(row,col)), shape=(numv, N))
-        return H,r
-    
-    def _con_sphere(c_v,c_cen,c_squ,c_a,c_b,c_c,c_d,c_e):
-        "a(x^2+y^2+z^2)+(bx+cy+dz)+e=0"
-        c_cen1,c_cen2,c_cen3,c_cen4 = c_cen
-        row = np.tile(arr1,9)
-        def __sphere(c_vi,c_sq):
-            c_x = c_vi[:numv]
-            c_y = c_vi[numv:2*numv]
-            c_z = c_vi[2*numv:]
-            col = np.r_[c_x,c_y,c_z,c_sq,c_a,c_b,c_c,c_d,c_e]
-            data = np.r_[X[c_b],X[c_c],X[c_d],X[c_a],X[c_sq],X[c_x],X[c_y],X[c_z],np.ones(numv)]
-            r = X[c_b]*X[c_x]+X[c_c]*X[c_y]+X[c_d]*X[c_z]+X[c_a]*X[c_sq]
-            H = sparse.coo_matrix((data,(row,col)), shape=(numv, N))
-            return H,r
-        H0,r0 = __sphere(c_v,c_squ[:numv])
-        H1,r1 = __sphere(c_cen1,c_squ[numv:2*numv])
-        H2,r2 = __sphere(c_cen2,c_squ[2*numv:3*numv])
-        H3,r3 = __sphere(c_cen3,c_squ[3*numv:4*numv])
-        H4,r4 = __sphere(c_cen4,c_squ[4*numv:])
-        H = sparse.vstack((H0,H1,H2,H3,H4))
-        r = np.r_[r0,r1,r2,r3,r4]
-        return H,r   
-    
-    def _con_const_radius(c_a,c_r):
-        "2*ai * r = 1 == df"
-        c_rr = np.tile(c_r, numv)
-        row = np.tile(arr1,2)
-        col = np.r_[c_a, c_rr]
-        data = np.r_[X[c_rr], X[c_a]]
-        H = sparse.coo_matrix((data,(row,col)), shape=(numv, N))
-        r = X[c_rr] * X[c_a] + 0.5*np.ones(numv)
-        return H,r
-    
-    def _con_orient(c_n,c_o):
-        "n0x*nx+n0y*ny+n0z*nz-x_orient^2 = 0"
-        row = np.tile(arr1,4)
-        col = np.r_[c_n, c_o]
-        data = np.r_[orientrn.flatten('F'), -2*X[c_o]]
-        r = -X[c_o]**2
-        H = sparse.coo_matrix((data,(row,col)), shape=(numv, N))
-        return H,r
-    
-    def _con_unit_normal(c_n):
-        cen = -np.c_[X[c_b]/X[c_a],X[c_c]/X[c_a],X[c_d]/X[c_a]]/2
-        rad1 = np.linalg.norm(cen-X[c_v].reshape(-1,3,order='F'),axis=1)
-        rad2 = np.linalg.norm(cen-X[c_cen1].reshape(-1,3,order='F'),axis=1)
-        rad3 = np.linalg.norm(cen-X[c_cen2].reshape(-1,3,order='F'),axis=1)
-        rad4 = np.linalg.norm(cen-X[c_cen3].reshape(-1,3,order='F'),axis=1)
-        rad5 = np.linalg.norm(cen-X[c_cen4].reshape(-1,3,order='F'),axis=1)
-        radii = (rad1+rad2+rad3+rad4+rad5)/5
-        
-        def _normal(c_a,c_b,c_anx,c_nx):
-            row = np.tile(np.arange(numv),4)
-            col = np.r_[c_a,c_b,c_anx,c_nx]
-            one = np.ones(numv)
-            data = np.r_[2*(radii*X[c_nx]+X[c_anx]),one,2*X[c_a],2*radii*X[c_a]]
-            r = 2*X[c_a]*(radii*X[c_nx]+X[c_anx])
-            H = sparse.coo_matrix((data,(row,col)), shape=(numv, N))
-            return H,r
-        Hb,rb = _normal(c_a,c_b,c_v[:numv],c_n[:numv])
-        Hc,rc = _normal(c_a,c_c,c_v[numv:2*numv],c_n[numv:2*numv])
-        Hd,rd = _normal(c_a,c_d,c_v[2*numv:],c_n[2*numv:])
-        Hn,rn = con_unit(X,c_n)
-        H = sparse.vstack((Hb, Hc, Hd, Hn))
-        r = np.r_[rb, rc, rd, rn]  
-        return H,r    
-    
-    H0,r0 = _con_v_square(c_v,c_cen,c_squ)
-    H1,r1 = _con_pos_a(c_a,c_a_sqr)
-    Hn,rn = _con_sphere_normalization(c_a,c_b,c_c,c_d,c_e)
-    Hs,rs = _con_sphere(c_v,c_cen,c_squ,c_a,c_b,c_c,c_d,c_e)
-    H = sparse.vstack((H0,H1,Hn,Hs))
-    r = np.r_[r0,r1,rn,rs]
- 
-    if kwargs.get('Snet_orient'):
-        w1 = kwargs.get('Snet_orient')
-        Ns_n = kwargs.get('Ns_n')
-        c_n = Ns_n-4*numv+arr3
-        c_n_sqr = Ns_n-numv+arr1
-        Ho,ro = _con_orient(c_n,c_n_sqr)
-        H = sparse.vstack((H, Ho * w1))
-        r = np.r_[r, ro * w1]
-        ##c
-    if kwargs.get('Snet_constR'):
-        w2 = kwargs.get('Snet_constR')
-        Ns_r = kwargs.get('Ns_r')
-        c_r = np.array([Ns_r-1],dtype=int)
-        Hr,rr = _con_const_radius(c_a,c_r)
-        H = sparse.vstack((H, Hr * w2))
-        r = np.r_[r, rr * w2]
- 
-    return H*w,r*w
-
-
-    #--------------------------------------------------------------------------
-    #                       G-net:
-    #--------------------------------------------------------------------------  
-def _con_gnet(X,w,c_ue1,c_ue2,c_ue3,c_ue4):
-    H1,r1 = con_equal_opposite_angle(X,c_ue1,c_ue2,c_ue3,c_ue4)
-    H2,r2 = con_equal_opposite_angle(X,c_ue2,c_ue3,c_ue4,c_ue1)
-    H, r = sparse.vstack((H1, H2)), np.r_[r1,r2]
-    return H*w, r*w
-
-def con_gnet(rregular=True,checker_weight=1,id_checker=None,**kwargs):
-    """
-    based on con_unit_edge(diag=False)
-    e1*e2-e3*e4=0; e2*e3-e1*e4=0
-    """
-    w = kwargs.get('Gnet')
-    mesh = kwargs.get('mesh')
-    X = kwargs.get('X')
-    N5 = kwargs.get('N5')
-    
-    if rregular:
-        "function same as below:con_gnet_diagnet"
-        num=mesh.num_rrv4f4
-    else:
-        num = mesh.num_regular
-    arr = np.arange(num)
-    c_ue1 = column3D(arr,N5-12*num,num)
-    c_ue2 = column3D(arr,N5-9*num,num)
-    c_ue3 = column3D(arr,N5-6*num,num)
-    c_ue4 = column3D(arr,N5-3*num,num)     
-    
-    if rregular and checker_weight<1:   ##no use
-        "at red-rr-vs, smaller weight"
-        wr = checker_weight
-        iblue,ired = id_checker
-        ib = column3D(iblue,0,mesh.num_rrv4f4)
-        ir = column3D(ired,0,mesh.num_rrv4f4)  
-        Hb,rb = _con_gnet(X,w,c_ue1[ib],c_ue2[ib],c_ue3[ib],c_ue4[ib])
-        Hr,rr = _con_gnet(X,wr,c_ue1[ir],c_ue2[ir],c_ue3[ir],c_ue4[ir])
-        H = sparse.vstack((Hb,Hr))
-        r = np.r_[rb,rr]  
-    else:
-        "all rr-vs, same weight"
-        H,r = _con_gnet(X,w,c_ue1,c_ue2,c_ue3,c_ue4)
-    
-    return H,r
-
-def con_gnet_diagnet(checker_weight=1,id_checker=None,**kwargs):
-    """
-    based on con_unit_edge(diag=True)
-    e1*e2-e3*e4=0; e2*e3-e1*e4=0
-    """
-    w = kwargs.get('Gnet_diagnet')
-    mesh = kwargs.get('mesh')
-    X = kwargs.get('X')
-    N5 = kwargs.get('N5')
-    
+    Nn = kwargs.get('Norient')
     num = mesh.num_rrv4f4
-    arr = np.arange(num)
+    arr,arr3 = np.arange(num),np.arange(3*num)
+    c_n = arr3 + Nn-4*num
+    v,v1,v2,v3,v4 =mesh.rrv4f4
+    c_v = column3D(v,0,mesh.V) 
+    N5 = kwargs.get('N5')
     c_ue1 = column3D(arr,N5-12*num,num)
     c_ue2 = column3D(arr,N5-9*num,num)
     c_ue3 = column3D(arr,N5-6*num,num)
-    c_ue4 = column3D(arr,N5-3*num,num)        
-    
-    if checker_weight<1:  ##no use
-        "at red-rr-vs, smaller weight"
-        wr = checker_weight
-        iblue,ired = id_checker
-        ib = column3D(iblue,0,mesh.num_rrv4f4)
-        ir = column3D(ired,0,mesh.num_rrv4f4)  
-        Hb,rb = _con_gnet(X,w,c_ue1[ib],c_ue2[ib],c_ue3[ib],c_ue4[ib])
-        Hr,rr = _con_gnet(X,wr,c_ue1[ir],c_ue2[ir],c_ue3[ir],c_ue4[ir])
-        H = sparse.vstack((Hb,Hr))
-        r = np.r_[rb,rr]  
-    else:
-        "all rr-vs, same weight"
-        H,r = _con_gnet(X,w,c_ue1,c_ue2,c_ue3,c_ue4)
-    
-    return H,r
+    c_ue4 = column3D(arr,N5-3*num,num)
 
+    def _binormal(X,c_v,c_va,c_vb,c_on):
+        "osculating_pln_normal=binormal: on:// (v1-v) x (v3-v)"
+        "on*(v1-v)=0; on*(v3-v)=0; on^2=1; no orientation"
+        H1,r1 = con_planarity(X,c_va,c_v,c_on)
+        H2,r2 = con_planarity(X,c_vb,c_v,c_on)
+        H3,r3 = con_unit(X,c_on)
+        H = sparse.vstack((H1,H2,H3))
+        r = np.r_[r1,r2,r3]
+        return H,r
+    
+    if name=='pseudogeo_1st':
+        w = kwargs.get('pseudogeo_1st')
+        Nps = kwargs.get('Nps1')
+        numpl = mesh.all_rr_polylines_num[0]
+        c_va = column3D(v1,0,mesh.V)
+        c_vb = column3D(v3,0,mesh.V)
+        ind = mesh.all_rr_polylines_vstar_order[0]
+    elif name == 'pseudogeo_2nd':
+        w = kwargs.get('pseudogeo_2nd')
+        Nps = kwargs.get('Nps2')
+        numpl = mesh.all_rr_polylines_num[1]
+        c_va = column3D(v2,0,mesh.V)
+        c_vb = column3D(v4,0,mesh.V)
+        ind = mesh.all_rr_polylines_vstar_order[1]
+
+    if is_unique_angle:
+        numpl = 1
+        c_cos = Nps-numpl
+        c_on = arr3 + Nps-3*num - numpl
+        Ha,ra = con_constangle2(X,c_on,c_n,c_cos)
+        #sin = np.sqrt(1-X[c_cos]**4)*np.ones(num)
+        if coss:
+            Hu,ru = con_constl(np.array([c_cos],dtype=int),coss,N)
+            Ha = sparse.vstack((Ha,Hu))
+            ra = np.r_[ra,ru]
+            #sin = np.sqrt(1-coss**2)*np.ones(num)
+    else:
+        "len(cos)==len(a)==numpl; len(on)==len(n)==num_rrv4f4"
+        c_cos = np.arange(numpl) + Nps-numpl
+        c_on = arr3 + Nps-3*num - numpl
+        c_cos_ind = c_cos[ind]
+        "multi const.ps-angle for different curves,each crv has a const.angle"
+        "vN * oN2 = cos(angle)"
+        Ha,ra = con_constangle3(X,c_on,c_n,c_cos_ind) 
+        #vcos = np.einsum('ij,ij->i',X[c_on].reshape(-1,3,order='F'),X[c_n].reshape(-1,3,order='F'))
+        #sin = np.sqrt(1-vcos**2)##should be np.sqrt(1-X[c_cos_ind]**4)
+        
+    "binormal:= normal of osculating plane "
+    Hon,ron = _binormal(X,c_v,c_va,c_vb,c_on)
+    H = sparse.vstack((Hon,Ha))
+    r = np.r_[ron,ra]
+    #print('on:', np.sum(np.square((Hon*X)-ron)))
+    #print('a:', np.sum(np.square((Ha*X)-ra)))
+    # print('H:', np.sum(np.square((H*X)-r)))
+    
+    if is_orient:
+        vN = X[c_n].reshape(-1,3,order='F')
+        if name=='pseudogeo_1st':
+            "vn*on1=cos1=a1^2;on1*(e2-e4)=b1^2"
+            t = (X[c_ue1]-X[c_ue3]).reshape(-1,3,order='F')
+            c_el,c_er = c_ue2,c_ue4
+            c_b = kwargs.get('Nps_orient1')-num+arr
+            c_a = kwargs.get('Nps_orient1')-num-numpl+np.arange(numpl)
+        elif name == 'pseudogeo_2nd':
+            "on2*(e1-e3)=b2^2"
+            t = (X[c_ue2]-X[c_ue4]).reshape(-1,3,order='F')
+            c_el,c_er = c_ue1,c_ue3
+            c_b = kwargs.get('Nps_orient2')-num+arr
+            c_a = kwargs.get('Nps_orient2')-num-numpl+np.arange(numpl)
+        T = t/np.linalg.norm(t,axis=1)[:,None]
+        U = np.cross(vN,T)/np.linalg.norm(np.cross(vN,T),axis=1)[:,None]
+        Uxyz = U.flatten('F')
+        if is_aotu:
+            "everysecond polyline are same orientation"
+            if name=='pseudogeo_1st':
+                even,odd = mesh.all_rr_polylines_everysecond_index[0]
+            elif name == 'pseudogeo_2nd':
+                even,odd = mesh.all_rr_polylines_everysecond_index[1]
+            pos = np.r_[even,even+num,even+2*num]
+            neg = np.r_[odd,odd+num,odd+2*num]
+
+            i_ao = np.r_[np.arange(numpl)[::4],np.arange(numpl)[1::4]]
+            i_tu = np.r_[np.arange(numpl)[2::4],np.arange(numpl)[3::4]]
+            
+            "Ao: orient with vN & t:"
+            Hao,rao = con_positive(X,c_cos[i_ao],c_a[i_ao])
+            Hpos,rpos = con_orient1(X,c_on[pos],c_el[pos],c_er[pos],c_b[even])
+            #Hpos,rpos = con_constangle4(X,c_on[pos],n_xyz[pos],sin[even]) ##need to check
+            "Tu: orient with -vN & -t:"
+            Htu,rtu = con_negative(X,c_cos[i_tu],c_a[i_tu],len(i_tu))
+            Hneg,rneg = con_orient1(X,c_on[neg],c_er[neg],c_el[neg],c_b[odd],True)
+            #Hneg,rneg = con_constangle4(X,c_on[neg],n_xyz[neg],sin[odd]) ##need to check
+            H = sparse.vstack((H,Hao,Hpos,Htu,Hneg))
+            r = np.r_[r,rao,rpos,rtu,rneg]
+            # H = sparse.vstack((H,Hao,Hpos))
+            # r = np.r_[r,rao,rpos]
+            #print('1:', np.sum(np.square((Hao*X)-rao)))
+            #print('2:', np.sum(np.square((Hpos*X)-rpos)))
+            print('3:', np.sum(np.square((Htu*X)-rtu)))
+            print('4:', np.sum(np.square((Hneg*X)-rneg)))
+            print('e:', np.sum(np.square((H*X)-r)))
+        else:
+            "<Curved-pleated structure> case: sharp mountain / valley"
+            "orient with vN: vn*on1=cos1=a1^2"
+            Ha,ra = con_positive(X,c_cos,c_a)
+            #"orient with t: on*(el-er)=b^2"
+            #Hb,rb = con_orient1(X, c_on, c_el, c_er, c_b)
+            "orient with t: on*(n x t1)=b^2:=sin=sqrt(1-cos^2):=sqrt(1-a^4)"
+            Hb,rb = con_orient2(X,c_on,Uxyz,c_b)
+            #Hb,rb = con_constangle4(X,c_on,Uxyz,sin)
+            H = sparse.vstack((H,Ha,Hb))
+            r = np.r_[r,ra,rb]
+            #print('cos=a^2:', np.sum(np.square((Ha*X)-ra)))
+            #print('on*U=sqrt(1-a^4):', np.sum(np.square((Hb*X)-rb)))
+    
+    if is_pq: ###No use now. replace by below is_dev
+        """ if pq1: the family of 1st-pseudogeodesic rectifying quads are planar
+            if pq2: the 2nd.....
+            if both: both ... are planar
+        """
+        id13l,id13r,id24l,id24r = mesh.all_rr_polylines_pq_vstar_order
+        onx,ony,onz = c_on[:num],c_on[num:2*num],c_on[2*num:]
+        vx,vy,vz = c_v[:num],c_v[num:2*num],c_v[2*num:]
+        if name=='pseudogeo_1st':
+            "pn1*oni = pn1*onj = pn1*(vi-vj)=0"
+            numpq=len(id13l)
+            c_pn = kwargs.get('Nps_pq1')-3*numpq+np.arange(3*numpq)
+            c_oni = np.r_[onx[id13l],ony[id13l],onz[id13l]]
+            c_onj = np.r_[onx[id13r],ony[id13r],onz[id13r]]
+            c_vi = np.r_[vx[id13l],vy[id13l],vz[id13l]]
+            c_vj = np.r_[vx[id13r],vy[id13r],vz[id13r]]
+        elif name == 'pseudogeo_2nd':
+            "pn2*oni = pn2*onj = pn2*(vi-vj)=0"
+            numpq=len(id24l)
+            c_pn = kwargs.get('Nps_pq2')-3*numpq+np.arange(3*numpq)
+            c_oni = np.r_[onx[id24l],ony[id24l],onz[id24l]]
+            c_onj = np.r_[onx[id24r],ony[id24r],onz[id24r]]
+            c_vi = np.r_[vx[id24l],vy[id24l],vz[id24l]]
+            c_vj = np.r_[vx[id24r],vy[id24r],vz[id24r]]
+        
+        def _planar_rectify_srf(c_pn,c_oni,c_onj,c_vi,c_vj):
+            "pn*oni = pn*onj = pn*(vi-vj)=0"
+            H1,r1 = con_orthogonal_2vectors(X,c_pn,c_oni)
+            H2,r2 = con_orthogonal_2vectors(X,c_pn,c_onj)
+            H3,r3 = con_planarity(X,c_vi,c_vj,c_pn)
+            H4,r4 = con_unit(X,c_pn)
+            H = sparse.vstack((H1,H2,H3,H4))
+            r = np.r_[r1,r2,r3,r4]
+            return H,r
+        Hi,ri = _planar_rectify_srf(c_pn,c_oni,c_onj,c_vi,c_vj)
+        H = sparse.vstack((H,Hi))
+        r = np.r_[r,ri]
+
+    if is_dev:
+        """ in fact no need below, since on // eixej,alpha=bet=90
+        rectifying strip can be developed into plane. No need PQ.
+        Here asking two consecutive edges who share a common ruling vector
+        forming two angles alpha + beta = pi
+                 / r
+          <_____/______>
+             ei     ej      r*ei = -r*ej <=> r*(ei+ej)=0
+        """   
+        if name=='pseudogeo_1st':
+            "r*(ei+ej)=0"
+            c_ei,c_ej = c_ue1,c_ue3
+        elif name == 'pseudogeo_2nd':
+            "r*(ei+ej)=0"
+            c_ei,c_ej = c_ue2,c_ue4
+        Hd,rd = con_ortho(X,c_ei,c_ej,c_on)
+        H = sparse.vstack((H,Hd))
+        r = np.r_[r,rd]
+        ##print('err:', np.sum(np.square((Hd*X)-rd)))
+
+    if is_unique_width or is_const_width:
+        "[(A-C)^2; (D-B)^2]=width^2"
+        if name=='pseudogeo_1st':
+            idA,idC,idD,idB = mesh.all_rr_polylines_aotu1234_index[0]
+            Nps_width = kwargs.get('Nps_width1')
+            num_strip13 = mesh.all_rr_aotu_strips_num[0]
+            num_width = num_strip13[0]+num_strip13[2]
+            arr_AC,arr_DB = mesh.all_rr_aotu_strip_width_arr[0]
+        elif name == 'pseudogeo_2nd':
+            idA,idC,idD,idB = mesh.all_rr_polylines_aotu1234_index[1]
+            Nps_width = kwargs.get('Nps_width2')
+            num_strip24 = mesh.all_rr_aotu_strips_num[1]
+            num_width = num_strip24[0]+num_strip24[2]
+            arr_AC,arr_DB = mesh.all_rr_aotu_strip_width_arr[1]
+        "NOTE: HAS PROBLEM FOR different len(A)!=len(C); len(D)!=len(B)"
+        ia,ib = min(len(idA),len(idC)), min(len(idD),len(idB))
+        #print(len(idA),len(idC),len(idD),len(idB),ia,ib)
+        idA,idC,idD,idB = idA[:ia],idC[:ia],idD[:ib],idB[:ib]
+        #print(len(idA),len(idC),len(idD),len(idB))
+        v_AD, v_CB = v[np.r_[idA,idD]], v[np.r_[idC,idB]]
+        c_AD = column3D(v_AD,0,mesh.V)
+        c_CB = column3D(v_CB,0,mesh.V)
+        if is_unique_width:
+            c_width = Nps_width-1
+            Hw,rw = con_diagonal2(X,c_AD,c_CB,c_width)
+        else:
+            "c_width ~ [arrAC; arrDB]"
+            c_width = Nps_width - num_width + np.arange(num_width)
+            c_w = np.array([],dtype=int)
+            arr = np.r_[arr_AC, arr_DB]
+            for i in range(num_width):
+                c_w = np.r_[c_w,np.tile(c_width[i],arr[i])]
+            #print(len(v_AD),len(c_w),num_width,len(arr))
+            Hw,rw = con_circle(X,c_AD,c_CB,c_w)
+        H = sparse.vstack((H,Hw))
+        r = np.r_[r,rw]
+    
+    #print('err:', np.sum(np.square((H*X)-r)))
+    return H*w,r*w
     #--------------------------------------------------------------------------
     #                      rulings:
     #-------------------------------------------------------------------------- 

@@ -8,6 +8,8 @@ __author__ = 'Hui'
 #------------------------------------------------------------------------------
 import numpy as np
 
+import itertools
+
 # -----------------------------------------------------------------------------
 from geometrylab.optimization.guidedprojectionbase import GuidedProjectionBase
 
@@ -15,9 +17,9 @@ from archgeolab.constraints.constraints_basic import con_planarity_constraints
 
 from archgeolab.constraints.constraints_fairness import con_fairness_4th_different_polylines
 
-from archgeolab.constraints.constraints_net import con_unit_edge,\
-    con_orthogonal_midline,con_anet,con_anet_diagnet,con_snet,\
-    con_snet_diagnet,con_doi,con_doi__freeform,con_kite
+from archgeolab.constraints.constraints_net import con_unit_edge,con_orient_rr_vn,\
+    con_orthogonal_midline,con_anet,con_snet,con_doi,con_doi__freeform,\
+    con_kite,con_pseudogeodesic_pattern
     #,con_cgc,con_pnet
 
 from archgeolab.constraints.constraints_glide import con_glide_in_plane,\
@@ -25,6 +27,8 @@ from archgeolab.constraints.constraints_glide import con_glide_in_plane,\
     con_fix_vertices,con_sharp_corner
                     
 from archgeolab.archgeometry.conicSection import interpolate_sphere
+
+from archgeolab.archgeometry.getGeometry import get_strip_from_rulings
 
 # -----------------------------------------------------------------------------
 
@@ -47,6 +51,14 @@ class GP_DOINet(GuidedProjectionBase):
     _Nanet = 0
     _Nsnet,_Ns_n,_Ns_r = 0,0,0
     _Nsdnet = 0
+    
+    _Norient = 0
+    _Nps1 = 0
+    _Nps2 = 0
+    _Nps_orient1 = 0
+    _Nps_orient2 = 0
+    _Nps_width1 = 0
+    _Nps_width2 = 0
 
     def __init__(self):
         GuidedProjectionBase.__init__(self)
@@ -74,8 +86,9 @@ class GP_DOINet(GuidedProjectionBase):
         'Kite' :0,
         
         'CGC' :0,
-        'CNC' :0,
-        'Pnet' :0,
+        'CGC_diagnet' :0,
+        'Gnet' : 0,  
+        'Gnet_diagnet' : 0, 
 
         'Anet' : 0,  
         'Anet_diagnet' : 0,  
@@ -84,10 +97,10 @@ class GP_DOINet(GuidedProjectionBase):
         'Snet_diagnet' : 0,
         'Snet_orient' : 1,
         'Snet_constR' : 0,
-        
-        'Gnet' : 0,  
-        'Gnet_diagnet' : 0, 
 
+        'Pnet' :0, ##TODO
+        'pseudogeo_1st':0,
+        'pseudogeo_2nd':0,
 
         ##Note: below from geometrylab/optimization/Guidedprojection.py:
         'fixed_vertices' : 1,
@@ -106,6 +119,7 @@ class GP_DOINet(GuidedProjectionBase):
         self.i_glide_bdry_crv, self.i_glide_bdry_ver = [],[]
         self.assign_coordinates = None
         
+        self.orient_rr_vn = False
         
         self.is_GO_or_OG = True
         self.is_diag_or_ctrl = False
@@ -121,8 +135,8 @@ class GP_DOINet(GuidedProjectionBase):
         self.is_pseudogeo_limitAngle = 0
         self.pseudogeo_1st_constangle = None
         self.pseudogeo_2nd_constangle = None
+        self.is_pseudogeo_uniquewidth=self.is_pseudogeo_constwidth = False
         self.data_pseudogeodesic_binormal = None #=[an,oN1,oN2,cos13,cos24]
-        
 
         self.if_uniqradius = False
         self.assigned_snet_radius = 0
@@ -156,7 +170,7 @@ class GP_DOINet(GuidedProjectionBase):
                    self.get_weight('Kite'),
                    
                    self.get_weight('CGC'),
-                   self.get_weight('CNC'),
+                   self.get_weight('CGC_diagnet'),
                    self.get_weight('Pnet'),
                    
                    self.get_weight('Anet'),
@@ -209,6 +223,12 @@ class GP_DOINet(GuidedProjectionBase):
         self.set_weight('gliding', 10 * self.max_weight)
         if self.get_weight('fixed_corners') != 0:
             self.set_weight('fixed_corners', 10 * self.max_weight)
+        
+        if self.get_weight('pseudogeo_1st') or self.get_weight('pseudogeo_2nd'):
+            self.orient_rr_vn = True
+ 
+        if self.orient_rr_vn:
+            self.set_weight('unit_edge_vec', 1)    
 
           
     def set_dimensions(self): # Huinote: be used in guidedprojectionbase
@@ -217,11 +237,15 @@ class GP_DOINet(GuidedProjectionBase):
         F = self.mesh.F
         N = 3*V
         N1 = N2 = N3 = N4 = N5 = N
-        num_regular = self.mesh.num_regular
+        num_rrstar = self.mesh.num_rrv4f4 ##may have problem for only one strip
+        
+        Norient = N
 
         Nanet = N
         Nsnet = Ns_n = Ns_r = N
-
+        
+        Nps1 = Nps2 = Nps_orient1 = Nps_orient2 = N
+        Nps_width1 = Nps_width2 = N
         #---------------------------------------------
         if self.get_weight('planarity') != 0:
             "X += [Nx,Ny,Nz]"
@@ -230,16 +254,18 @@ class GP_DOINet(GuidedProjectionBase):
 
         if self.get_weight('unit_edge_vec'): #Gnet, AGnet
             "X+=[le1,le2,le3,le4,ue1,ue2,ue3,ue4]"
-            if self.get_weight('isogonal'):
-                N += 16*num_regular
-            else:
-                "for Anet, AGnet, DGPC"
-                N += 16*self.mesh.num_rrv4f4
+            "for Anet, AGnet, DGPC"
+            N += 16*self.mesh.num_rrv4f4
             N5 = N
         elif self.get_weight('unit_diag_edge_vec'): #Gnet_diagnet
             "le1,le2,le3,le4,ue1,ue2,ue3,ue4 "
             N += 16*self.mesh.num_rrv4f4
             N5 = N
+        
+        if self.orient_rr_vn:
+            "X+=[vn, a], vN * Nv = a^2>=0; Nv is given orient-vertex-normal"
+            N += 4*num_rrstar
+            Norient = N
 
         if self.get_weight('Anet') or self.get_weight('Anet_diagnet'):
             N += 3*self.mesh.num_rrv4f4#3*num_regular
@@ -258,6 +284,74 @@ class GP_DOINet(GuidedProjectionBase):
                 N += 1
                 Ns_r = N
 
+        if self.get_weight('pseudogeo_1st') or self.get_weight('pseudogeo_2nd'):  
+            "based on orient_rr_vn=True"
+            num13,num24 = self.mesh.all_rr_polylines_num
+            if self.get_weight('pseudogeo_1st'):
+                "X +=[on1,cos] "
+                N += 3*num_rrstar
+                if self.is_pseudogeo_allSameAngle: ##unique angle
+                    "unique const.ps-angle, one variable"
+                    num_cos=1
+                else:
+                    "multi const.ps-angle for different curves"
+                    num_cos=num13
+                N += num_cos 
+                Nps1 = N
+                
+                if self.is_pseudogeo_orient:
+                    N += num_cos + num_rrstar
+                    Nps_orient1 = N
+                    
+                num_width=0
+                if self.is_pseudogeo_uniquewidth:
+                    num_width=1
+                elif self.is_pseudogeo_constwidth:
+                    "support-structure-strip for AC & DB"
+                    if False:
+                        if int(num13%4)==2 or int(num13%4)==3:
+                            num_width=int(num13/4) + 1 + int((num13-2)/4)
+                        else:
+                            num_width=int(num13/4) + int((num13-2)/4)
+                    else:
+                        "below should equal to the above"
+                        num_strip13 = self.mesh.all_rr_aotu_strips_num[0]
+                        num_width = num_strip13[0]+num_strip13[2]
+                N += num_width 
+                Nps_width1 = N   
+                    
+            if self.get_weight('pseudogeo_2nd'):
+                "X +=[on2,cos] "
+                N += 3*num_rrstar
+                if self.is_pseudogeo_allSameAngle: ##unique angle
+                    "unique const.ps-angle, one variable"
+                    num_cos=1
+                else:
+                    "multi const.ps-angle for different curves"
+                    num_cos=num24
+                N += num_cos
+                Nps2 = N
+                
+                if self.is_pseudogeo_orient:
+                    N += num_cos + num_rrstar
+                    Nps_orient2 = N
+
+                num_width=0
+                if self.is_pseudogeo_uniquewidth:
+                    num_width=1
+                elif self.is_pseudogeo_constwidth:
+                    "support-structure-strip for AC & DB"
+                    if False:
+                        if int(num24%4)==2 or int(num24%4)==3:
+                            num_width=int(num24/4) + 1 + int((num24-2)/4)
+                        else:
+                            num_width=int(num24/4) + int((num24-2)/4)
+                    else:
+                        "below should equal to the above"
+                        num_strip24 = self.mesh.all_rr_aotu_strips_num[1]
+                        num_width = num_strip24[0]+num_strip24[2]
+                N += num_width 
+                Nps_width2 = N  
         #---------------------------------------------
         if N1 != self._N1 or N2 != self._N2:
             self.reinitialize = True
@@ -276,7 +370,21 @@ class GP_DOINet(GuidedProjectionBase):
             self.reinitialize = True
         if Ns_r != self._Ns_r:
             self.reinitialize = True
-
+            
+        if Norient != self._Norient:
+            self.reinitialize = True    
+        if Nps1 != self._Nps1:
+            self.reinitialize = True  
+        if Nps2 != self._Nps2:
+            self.reinitialize = True 
+        if Nps_orient1 != self._Nps_orient1:
+            self.reinitialize = True  
+        if Nps_orient2 != self._Nps_orient2:
+            self.reinitialize = True  
+        if Nps_width1 != self._Nps_width1:
+            self.reinitialize = True  
+        if Nps_width2 != self._Nps_width2:
+            self.reinitialize = True  
         #----------------------------------------------
         self._N = N
         self._N1 = N1
@@ -287,6 +395,14 @@ class GP_DOINet(GuidedProjectionBase):
         self._Nanet = Nanet
         self._Nsnet,self._Ns_n,self._Ns_r = Nsnet,Ns_n,Ns_r
 
+        self._Norient = Norient
+        self._Nps1 = Nps1
+        self._Nps2 = Nps2
+        self._Nps_orient1 = Nps_orient1
+        self._Nps_orient2 = Nps_orient2
+        self._Nps_width1 = Nps_width1
+        self._Nps_width2 = Nps_width2
+        
         self.build_added_weight() # Hui add
         
         
@@ -308,6 +424,10 @@ class GP_DOINet(GuidedProjectionBase):
             X = np.r_[X,l1,l2,l3,l4]
             X = np.r_[X,E1.flatten('F'),E2.flatten('F'),E3.flatten('F'),E4.flatten('F')]
 
+        if self.orient_rr_vn:
+            _,vN,a = self.mesh.get_v4_orient_unit_normal()
+            X = np.r_[X,vN.flatten('F'),a]
+
         if self.get_weight('Anet') or self.get_weight('Anet_diagnet'):
             if self.get_weight('Anet'):
                 if True:
@@ -320,12 +440,77 @@ class GP_DOINet(GuidedProjectionBase):
             V4N = self.mesh.vertex_normals()[v]
             X = np.r_[X,V4N.flatten('F')]
 
-        ### Snet-project:
+        ### CNC:
         if self.get_weight('Snet') or self.get_weight('Snet_diagnet'):
             r = self.get_weight('Snet_constR')
             is_diag = False if self.get_weight('Snet') else True
             x_snet,Nv4 = self.get_snet(r,is_diag)
             X = np.r_[X,x_snet]
+
+        ### Pnet:
+        if self.get_weight('pseudogeo_1st') or self.get_weight('pseudogeo_2nd'):
+            """ based on orient_rr_vs: X +=[vN,a] (vN*Nv=a^2)
+            X=+[oN1; cos1; a,b; width; pn; xy]
+            if AoTu_structure: oN1,oN2 is oriented with up/down direction;
+                               oN only appears in one continuous quadrant;
+                               oriented with orientT=True, no relation with vN
+            else: 
+                if orientT(default): oN1,oN2 are oriented with t1,t2 = e1-e3, e2-e4
+                if orientN: oN is oriented with the oriented-vertex-normal
+            """
+            if self.data_pseudogeodesic_binormal is None:
+                "Pl. Click &  Check binormals first: "
+                _,oN1,oN2,cs13,cs24 = self.pseudogeodesic_binormal()
+            else:
+                _,oN1,oN2,cs13,cs24 = self.data_pseudogeodesic_binormal
+            cos1,cos2 = np.abs(cs13[0]), np.abs(cs24[0])
+            #_,_,_,_,_,e1,e2,e3,e4 = self.mesh.get_v4_unit_edge(True)
+            _,_,ut1,ut2,_,_ = self.mesh.get_v4_unit_tangents()
+            vN = self.mesh.get_v4_unit_normal()[2] ##vN:=ut1xut2/||
+            
+            if self.get_weight('pseudogeo_1st'):
+                if self.is_pseudogeo_allSameAngle:
+                    cos1 = np.mean(cos1)
+                X = np.r_[X,oN1.flatten('F'), cos1]
+                
+                if self.is_pseudogeo_orient:
+                    "vn*on1=cos1=a1^2;on1*(vNxut1)=sin1=b1^2; a1^4+b1^4==1"
+                    a = np.sqrt(np.abs(cos1))
+                    U = np.cross(vN,ut1)/np.linalg.norm(np.cross(vN,ut1),axis=1)[:,None]
+                    b = np.sqrt(np.abs(np.einsum('ij,ij->i',oN1,U)))
+                    #"vn*on1=cos1=a1^2;on1*(e2-e4)=b1^2"
+                    #b = np.sqrt(np.abs(np.einsum('ij,ij->i',oN1,e2-e4)))
+                    X = np.r_[X,a,b]                
+                
+                if self.is_pseudogeo_uniquewidth:
+                    width = self.get_pseudogeodesic_constwidth(unique=True)
+                    X = np.r_[X,width]
+                elif self.is_pseudogeo_constwidth:
+                    width = self.get_pseudogeodesic_constwidth()
+                    X = np.r_[X,width]
+
+
+            if self.get_weight('pseudogeo_2nd'):
+                if self.is_pseudogeo_allSameAngle:
+                    cos2 = np.mean(cos2)
+                X = np.r_[X,oN2.flatten('F'), cos2]
+                
+                if self.is_pseudogeo_orient:
+                    "either or both family(ies) have oriented binormals between <vn,t2(t1)>"
+                    "vn*on1=cos1=a1^2;on1*(vNxut1)=sin1=b1^2; a1^4+b1^4==1"
+                    a = np.sqrt(np.abs(cos2))
+                    U = np.cross(vN,ut2)/np.linalg.norm(np.cross(vN,ut2),axis=1)[:,None]
+                    b = np.sqrt(np.abs(np.einsum('ij,ij->i',oN2,U)))
+                    #"vn*on2=cos2=a2^2;on2*(e1-e3)=b2^2"
+                    #b = np.sqrt(np.abs(np.einsum('ij,ij->i',oN2,e1-e3)))
+                    X = np.r_[X,a,b]
+                    
+                if self.is_pseudogeo_uniquewidth:
+                    width = self.get_pseudogeodesic_constwidth(another=True,unique=True)
+                    X = np.r_[X,width]
+                elif self.is_pseudogeo_constwidth:
+                    width = self.get_pseudogeodesic_constwidth(another=True)
+                    X = np.r_[X,width]       
         #-----------------------
         
         self._X = X
@@ -483,6 +668,11 @@ class GP_DOINet(GuidedProjectionBase):
             H,r = con_unit_edge(rregular=True,**self.weights)
             self.add_iterative_constraint(H, r, 'unit_diag_edge_vec')
 
+        if self.orient_rr_vn:
+            "rr_vn orients samely as Nv"
+            H,r = con_orient_rr_vn(**self.weights) ##weight=1
+            self.add_iterative_constraint(H, r, 'orient_vn')
+
         if self.get_weight('boundary_z0') !=0:
             z = 0
             v = np.array([816,792,768,744,720,696,672,648,624,600,576,552,528,504,480,456,432,408,384,360,336,312,288,264,240,216,192,168,144,120,96,72,48,24,0],dtype=int)
@@ -548,7 +738,7 @@ class GP_DOINet(GuidedProjectionBase):
             H,r = con_anet(rregular=True,**self.weights)
             self.add_iterative_constraint(H, r, 'Anet')
         elif self.get_weight('Anet_diagnet'):
-            H,r = con_anet_diagnet(**self.weights)
+            H,r = con_anet(rregular=True,is_diagnet=True,**self.weights)
             self.add_iterative_constraint(H, r, 'Anet_diagnet')
 
         if self.get_weight('Snet'):
@@ -558,19 +748,60 @@ class GP_DOINet(GuidedProjectionBase):
                            assigned_r=self.assigned_snet_radius,
                            **self.weights)
             self.add_iterative_constraint(H, r, 'Snet') 
-        elif self.get_weight('Snet_diagnet'):
-            if 1:
-                "SSG-PROJECT"
-                orientrn = self.mesh.new_vertex_normals()
-                H,r = con_snet(orientrn,is_diagmesh=True,
-                               is_uniqR=self.if_uniqradius,
-                               assigned_r=self.assigned_snet_radius,
-                               **self.weights)
-            else: 
-                "CRPC-project"
-                H,r = con_snet_diagnet(**self.weights)
+        if self.get_weight('Snet_diagnet'):
+            orientrn = self.mesh.new_vertex_normals()
+            H,r = con_snet(orientrn,is_diagnet=True,
+                           is_uniqR=self.if_uniqradius,
+                           assigned_r=self.assigned_snet_radius,
+                           **self.weights)
             self.add_iterative_constraint(H, r, 'Snet_diag') 
 
+        if self.get_weight('pseudogeo_1st') or self.get_weight('pseudogeo_2nd'):
+            "based on self.orient_rr_vn = True"
+            is_unique_angle, coss = False, None
+            is_unique_width = self.is_pseudogeo_uniquewidth
+            is_const_width, width = self.is_pseudogeo_constwidth, None
+            is_pq = False #self.is_pseudogeo_rectify_pq ##TODO:hui remove
+            is_dev = False #self.is_pseudogeo_rectify_dvlp ##TODO:hui remove
+            is_orient = self.is_pseudogeo_orient
+            is_aotu = False #self.is_pseudogeo_aotu
+            if self.get_weight('pseudogeo_1st'):
+                "along each curve, angle is const. but different from each other"
+                name = 'pseudogeo_1st'
+                if self.is_pseudogeo_allSameAngle:
+                    "there is uniqe const. angle"
+                    is_unique_angle=True
+                    coss = np.cos(self.pseudogeo_1st_constangle/180.0*np.pi)
+                H,r = con_pseudogeodesic_pattern(name,is_orient,
+                                                 is_aotu,
+                                                 is_pq,
+                                                 is_dev,
+                                                 is_unique_angle,
+                                                 coss,
+                                                 is_unique_width,
+                                                 is_const_width,
+                                                 width,
+                                                 **self.weights)
+                self.add_iterative_constraint(H, r, 'pseudogeo_1st')
+            if self.get_weight('pseudogeo_2nd'):
+                name = 'pseudogeo_2nd'
+                if self.is_pseudogeo_allSameAngle:
+                    "there is uniqe const. angle"
+                    is_unique_angle=True
+                    coss = np.cos(self.pseudogeo_2nd_constangle/180.0*np.pi)
+                H,r = con_pseudogeodesic_pattern(name,
+                                                 is_orient,
+                                                 is_aotu,
+                                                 is_pq,
+                                                 is_dev,
+                                                 is_unique_angle,
+                                                 coss,
+                                                 is_unique_width,
+                                                 is_const_width,
+                                                 width,
+                                                 **self.weights)
+                self.add_iterative_constraint(H, r, 'pseudogeo_2nd')
+                
         ###--------------------------------------------------------------------                
    
         self.is_initial = False   
@@ -592,12 +823,18 @@ class GP_DOINet(GuidedProjectionBase):
         self.add_weight('Nsnet', self._Nsnet)
         self.add_weight('Ns_n', self._Ns_n)
         self.add_weight('Ns_r', self._Ns_r)
+        
+        self.add_weight('Norient', self._Norient)
+        self.add_weight('Nps1', self._Nps1)
+        self.add_weight('Nps2', self._Nps2)
+        self.add_weight('Nps_orient1', self._Nps_orient1)
+        self.add_weight('Nps_orient2', self._Nps_orient2)
+        self.add_weight('Nps_width1', self._Nps_width1)
+        self.add_weight('Nps_width2', self._Nps_width2)
 
     def values_from_each_iteration(self,**kwargs):
         if kwargs.get('unit_edge_vec'):
-            if True:
-                rr=True
-            _,l1,l2,l3,l4,_,_,_,_ = self.mesh.get_v4_unit_edge(rregular=rr)
+            _,l1,l2,l3,l4,_,_,_,_ = self.mesh.get_v4_unit_edge(rregular=True)
             Xi = np.r_[l1,l2,l3,l4]
             return Xi
 
@@ -648,6 +885,255 @@ class GP_DOINet(GuidedProjectionBase):
         return normals
 
 
+    #------------------------------------------------------------------------
+    
+    def get_orient_rr_normal(self,is_diag=False,initialized=True):
+        if initialized or self.is_initial or not self.orient_rr_vn:
+            return self.mesh.get_v4_orient_unit_normal(is_diag) ##==[an,vN,a]
+        elif self.orient_rr_vn:
+            v = self.mesh.ver_rrv4f4
+            an = self.mesh.vertices[v]
+            num = self.mesh.num_rrv4f4
+            c_n = np.arange(3*num) + self._Norient-4*num 
+            vN = self.X[c_n].reshape(-1,3,order='F')
+            return [an,vN,0]
+
+    def pseudogeodesic_binormal(self, is_initial=False, GO_Ps=False,
+                                      is_orientT=False,is_orientN=False,
+                                      is_remedy=False, is_smooth=False):
+        "save as self.data_pseudogeodesic_binormal"
+        V = self.mesh.vertices
+        v = self.mesh.ver_rrv4f4   
+        an = V[v]
+        if self.is_initial or is_initial: 
+            v,v1,v2,v3,v4 = self.mesh.rrv4f4  
+            vN = self.mesh.get_v4_orient_unit_normal()[1]
+            _,_,ut1,ut2,_,_ = self.mesh.get_v4_unit_tangents()
+            T2,T1 = np.cross(vN,ut1), np.cross(vN,ut2)
+            oN1 = np.cross(V[v1]-V[v],V[v3]-V[v])
+            oN2 = np.cross(V[v2]-V[v],V[v4]-V[v])
+            if is_remedy:
+                lon1 = np.linalg.norm(oN1, axis=1)
+                i = np.where(lon1<1e-4)[0]
+                for ii in i:
+                    j,k = np.where(v==v1[ii])[0],np.where(v==v3[ii])[0]
+                    if len(j)!=0 and len(k)!=0:
+                        oN1[ii] = (oN1[j]+oN1[k])/np.linalg.norm(oN1[j]+oN1[k])
+                    elif len(j)!=0:
+                        oN1[ii] = oN1[j]/np.linalg.norm(oN1[j])
+                    elif len(k)!=0:
+                        oN1[ii] = oN1[k]/np.linalg.norm(oN1[k])
+                    else:
+                        oN1[ii] = vN[ii]
+                        
+                lon2 = np.linalg.norm(oN2, axis=1)
+                i = np.where(lon2<1e-4)[0]
+                for ii in i:
+                    j,k = np.where(v==v2[ii])[0],np.where(v==v4[ii])[0]
+                    if len(j)!=0 and len(k)!=0:
+                        oN2[ii] = (oN2[j]+oN2[k])/np.linalg.norm(oN2[j]+oN2[k])
+                    elif len(j)!=0:
+                        oN2[ii] = oN2[j]/np.linalg.norm(oN2[j])
+                    elif len(k)!=0:
+                        oN2[ii] = oN2[k]/np.linalg.norm(oN2[k])
+                    else:
+                        oN2[ii] = vN[ii]
+
+            oN1 = oN1/np.linalg.norm(oN1, axis=1)[:,None]
+            oN2 = oN2/np.linalg.norm(oN2, axis=1)[:,None]
+            
+            if is_orientT or is_orientN:
+                i1 = np.where(np.einsum('ij,ij->i',T2,oN1)<0)[0]
+                i2 = np.where(np.einsum('ij,ij->i',T1,oN2)<0)[0] ##note sign
+
+                j1 = np.where(np.einsum('ij,ij->i',vN,oN1)<0)[0]
+                j2 = np.where(np.einsum('ij,ij->i',vN,oN2)<0)[0]
+
+                if is_orientT and not is_orientN:
+                    oN1[i1] = -oN1[i1] 
+                    oN2[i2] = -oN2[i2] 
+                        
+                elif is_orientN and not is_orientT: ##note: suitable for crv_pleat but not AoTu
+                    oN1[j1] = -oN1[j1]  
+                    oN2[j2] = -oN2[j2] 
+                    
+                elif is_orientT and is_orientN:
+                    "orientT:[a,b], orientN:[b,c]==> [a',b',c']=[2*N-a,-b,2*t-c]"
+                    a1 = np.setdiff1d(i1,j1)
+                    c1 = np.setdiff1d(j1,i1)
+                    b1 = np.intersect1d(i1,j1)
+                    oN1[a1] = 2*vN[a1]-oN1[a1]
+                    oN1[b1] = -oN1[b1]
+                    oN1[c1] = 2*T2[c1]-oN1[c1]
+                    
+                    a2 = np.setdiff1d(i2,j2)
+                    c2 = np.setdiff1d(j2,i2)
+                    b2 = np.intersect1d(i2,j2)
+                    oN2[a2] = 2*vN[a2]-oN2[a2]
+                    oN2[b2] = -oN2[b2]
+                    oN2[c2] = 2*T1[c2]-oN2[c2]
+                    
+                oN1 = oN1/np.linalg.norm(oN1, axis=1)[:,None]
+                oN2 = oN2/np.linalg.norm(oN2, axis=1)[:,None]
+                
+            if is_smooth:
+                from huilab.huimesh.smooth import fair_vectors
+                v13l,v13c,v13r = [],[],[]
+                v24l,v24c,v24r = [],[],[]
+                for i in range(len(v)):
+                    if v1[i] in v and v3[i] in v:
+                        v13c.append(i)
+                        v13l.append(np.where(v==v1[i])[0][0])
+                        v13r.append(np.where(v==v3[i])[0][0])
+                    if v2[i] in v and v4[i] in v:
+                        v24c.append(i)
+                        v24l.append(np.where(v==v2[i])[0][0])
+                        v24r.append(np.where(v==v4[i])[0][0])
+                oN1 = fair_vectors(oN1,v13l,v13c,v13r,itera=10,efair=0.005)
+                oN2 = fair_vectors(oN2,v24l,v24c,v24r,itera=10,efair=0.005) 
+
+            cs13,cs24 = self.mesh.get_isoline_normal_binormal_angles(assign=[v,vN,oN1,oN2])
+            return an,oN1,oN2,cs13,cs24
+        else:
+            num = self.mesh.num_rrv4f4
+            arr3 = np.arange(3*num)
+            def _get_binormal_cos0(Nps,numpl):
+                "if AoTu: oN should be up/down orientation"
+                if self.is_pseudogeo_allSameAngle:
+                    c_cos, c_sin = Nps-3, Nps-2
+                    c_bin = arr3 + Nps-3*num - 3
+                else:
+                    c_cos = np.arange(numpl) + Nps-numpl*3
+                    c_sin = c_cos + numpl
+                    c_bin = arr3 + Nps-3*num - numpl*3
+                oN = self.X[c_bin].reshape(-1,3,order='F')  
+                cos,sin = self.X[c_cos],self.X[c_sin]
+                return oN,[cos,sin]
+            
+            def _get_binormal_cos(Nps,numpl):
+                "if AoTu: oN should be up/down orientation"
+                if self.is_pseudogeo_allSameAngle:
+                    numpl = 1
+                    c_cos = Nps-1
+                    c_bin = arr3 + Nps-3*num - numpl
+                else:
+                    c_cos = np.arange(numpl) + Nps-numpl
+                    c_bin = arr3 + Nps-3*num - numpl
+                oN = self.X[c_bin].reshape(-1,3,order='F')  
+                cos = self.X[c_cos]
+                return oN,cos
+            
+            numpl13 = self.mesh.all_rr_polylines_num[0]
+            numpl24 = self.mesh.all_rr_polylines_num[1]
+            if GO_Ps:
+                oN1,cs13 = _get_binormal_cos0(self._Ngops,numpl13)
+                oN2,cs24 = _get_binormal_cos0(self._Ngops,numpl24)
+                return an,oN1,oN2,cs13,cs24  
+            else:
+                oN1,cos13 = _get_binormal_cos(self._Nps1,numpl13)
+                oN2,cos24 = _get_binormal_cos(self._Nps2,numpl24)
+            return an,oN1,oN2,cos13,cos24   
+        
+    def pseudogeodesic_rectifying_srf(self,width,all_on=None,centerline=False,
+                                      is_smooth=False):
+        if all_on is not None:
+            if centerline:
+                "strip's centerline pass through the polyline"
+                an = self.mesh.vertices - 0.5*all_on
+            else:
+                an = self.mesh.vertices
+            crvlists1,crvlists2 = self.mesh.continue_family_poly
+            ind1 = np.array(list(itertools.chain(*crvlists1)))
+            ind2 = np.array(list(itertools.chain(*crvlists2)))
+            "need to check crvlist1 or crvlist2"
+            arr1,arr2=[],[]
+            for ilist in crvlists1:
+                arr1.append(len(ilist))
+            for ilist in crvlists2:
+                arr2.append(len(ilist))   
+            arr1,arr2 = np.array(arr1), np.array(arr2)
+            sm1 = get_strip_from_rulings(an[ind1],all_on[ind1],arr1,is_smooth)
+            sm2 = get_strip_from_rulings(an[ind2],all_on[ind2],arr2,is_smooth)
+            return sm1,arr1,sm2,arr2
+        else:
+            an,on1,on2,_,_ = self.data_pseudogeodesic_binormal
+            on1 *= width*2
+            on2 *= width*2
+            ind1,ind2 = self.mesh.all_rr_polylines_v_vstar_order
+            arr1,arr2 = self.mesh.all_rr_polylines_vnum_arr
+            if centerline:
+                "strip's centerline pass through the polyline"
+                an1 = an - 0.5*on1
+                an2 = an - 0.5*on2
+            else:
+                "strip's bottomcrv pass through the polyline"
+                an1=an2 = an
+    
+            sm1 = get_strip_from_rulings(an1[ind1],on1[ind1],arr1,is_smooth)
+            sm2 = get_strip_from_rulings(an2[ind2],on2[ind2],arr2,is_smooth)
+            return sm1,arr1,sm2,arr2
+    
+    def pseudogeodesic_rectifying_pq_normal(self,width=1):
+        id13l,id13r,id24l,id24r = self.mesh.all_rr_polylines_pq_vstar_order
+        #an,on1,on2,_,_ = self.data_pseudogeodesic_binormal#self.pseudogeodesic_binormal()
+        an,on1,on2,_,_ = self.pseudogeodesic_binormal()
+        def get_planar_quad_normal(idl,idr,on):
+            Vl,Vr = an[idl], an[idr]
+            oN = on[idl]
+            pN = np.cross(Vl-Vr, oN)
+            pN = pN / np.linalg.norm(pN,axis=1)[:,None]
+            bary = (Vl+Vr+Vl+on[idl]*width+Vr+on[idr]*width)/4
+            return bary,pN
+        an1,pN1 = get_planar_quad_normal(id13l,id13r,on1)
+        an2,pN2 = get_planar_quad_normal(id24l,id24r,on2)
+        return [an1,pN1],[an2,pN2]
+
+    def get_pseudogeodesic_constwidth(self,another=False,unique=False):
+        "for the initial width in X"
+        if another:
+            id_ao12tu12 = self.mesh.all_rr_polylines_aotu1234_index[1]
+            Nps_width = self._Nps_width2
+            num_strip24 = self.mesh.all_rr_aotu_strips_num[1]
+            num_width = num_strip24[0]+num_strip24[2]
+            arr_AC,arr_DB = self.mesh.all_rr_aotu_strip_width_arr[1]
+        else:
+            id_ao12tu12 = self.mesh.all_rr_polylines_aotu1234_index[0]
+            Nps_width = self._Nps_width1
+            num_strip13 = self.mesh.all_rr_aotu_strips_num[0]
+            num_width = num_strip13[0]+num_strip13[2]
+            arr_AC,arr_DB = self.mesh.all_rr_aotu_strip_width_arr[0]
+        "Note: below only for len(A)=len(C)=len(D)=len(B); otherwise need change"
+        if self.is_initial: 
+            V = self.mesh.vertices
+            rrv = self.mesh.ver_rrv4f4
+            id1,id2,id3,id4 = id_ao12tu12
+            A,C,D,B = V[rrv[id1]],V[rrv[id2]],V[rrv[id3]],V[rrv[id4]]
+            "NOTE: HAS PROBLEM FOR different len(A)!=len(C); len(D)!=len(B)"
+            ia,ib = min(len(id1),len(id2)), min(len(id3),len(id4))
+            widthAC = np.linalg.norm(A[:ia]-C[:ia],axis=1)
+            widthDB = np.linalg.norm(D[:ib]-B[:ib],axis=1)
+            if unique:
+                width = np.mean(np.r_[widthAC,widthDB])
+            else:
+                "len(arr_AC)+len(arr_DB)=num_width"
+                width = np.array([])
+                k = 0
+                for i in arr_AC:
+                    width = np.r_[width,np.mean(widthAC[k:k+i])]
+                    k +=i
+                k = 0
+                for i in arr_DB:
+                    width = np.r_[width,np.mean(widthDB[k:k+i])]
+                    k +=i
+            #print(width,arr_AC,arr_DB,ia,ib)
+        else:
+            if unique:
+                width = self.X[Nps_width-1]
+            else:
+                c_width = Nps_width - num_width + np.arange(num_width)
+                width = self.X[c_width]
+        return width
+    
     #--------------------------------------------------------------------------
     #                                Errors strings
     #--------------------------------------------------------------------------

@@ -13,8 +13,11 @@ from scipy import sparse
 """
 from constraints_basic import 
     column3D,con_edge,con_unit,con_constl,con_equal_length,con_symmetry,\
-    con_planarity,con_planarity_constraints,con_unit_normal,con_orient,
-    con_dependent_vector,con_equal_opposite_angle
+    con_planarity,con_planarity_constraints,con_unit_normal,
+    con_orient,con_orient1,con_orient2,con_ortho,con_orthogonal_2vectors,
+    con_dependent_vector,con_equal_opposite_angle,
+    con_constangle2,con_constangle3,con_constangle4,con_positive,con_negative,\
+    con_diagonal2,con_circle
 """
 # -------------------------------------------------------------------------
 #                           general / basic
@@ -79,6 +82,55 @@ def con_constl(c_ld1,init_l1,N):
     H = sparse.coo_matrix((data,(row,col)), shape=(num, N))
     return H,r
 
+def con_positive(X,c_K,c_a):
+    "K=a^2"
+    num = len(c_a)
+    col = np.r_[c_a,c_K]
+    row = np.tile(np.arange(num),2)
+    data = np.r_[2*X[c_a],-np.ones(num)]
+    r = X[c_a]**2
+    H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
+    return H,r
+
+def con_negative(X,c_K,c_a,num):
+    "K=-a^2"
+    col = np.r_[c_a,c_K]
+    row = np.tile(np.arange(num),2)
+    data = np.r_[2*X[c_a],np.ones(num)]
+    r = X[c_a]**2
+    H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
+    return H,r
+
+def con_constangle2(X,c_u1,c_u2,c_a):
+    "u1*u2 = a; a is 1 variable!"
+    num = int(len(c_u1)/3)
+    row = np.tile(np.arange(num),7)
+    col = np.r_[c_u1,c_u2,c_a*np.ones(num)]
+    data = np.r_[X[c_u2],X[c_u1],-np.ones(num)]
+    r = np.einsum('ij,ij->i',X[c_u1].reshape(-1,3, order='F'),X[c_u2].reshape(-1,3, order='F'))
+    H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
+    return H,r
+
+def con_constangle3(X,c_on,c_vn,c_cos):
+    "vN * oN2 - cos = 0; variables:vn,on2,cos; len(cos)=num"
+    num = len(c_cos)
+    row = np.tile(np.arange(num),7)
+    data = np.r_[X[c_on],X[c_vn], -np.ones(num)]
+    col = np.r_[c_vn,c_on,c_cos]
+    r = np.einsum('ij,ij->i', X[c_vn].reshape(-1,3,order='F'), X[c_on].reshape(-1,3,order='F'))
+    H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
+    return H,r
+
+def con_constangle4(X,c_on,n_xyz,sin):
+    "on*n == const.; only on is variable; len(sin)=num=1/3len(n_xyz)=1/3len(c_on)"
+    num = len(sin)
+    row = np.tile(np.arange(num),3)
+    col = c_on
+    data = n_xyz
+    r = sin
+    H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
+    return H,r
+
 def con_planarity(X,c_v1,c_v2,c_n): 
     "n*(v1-v2)=0"
     num = int(len(c_n)/3)
@@ -86,6 +138,16 @@ def con_planarity(X,c_v1,c_v2,c_n):
     row = np.tile(np.arange(num),9)
     data = np.r_[X[c_v1]-X[c_v2],X[c_n],-X[c_n]]
     r = np.einsum('ij,ij->i',X[c_n].reshape(-1,3, order='F'),(X[c_v1]-X[c_v2]).reshape(-1,3, order='F'))
+    H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
+    return H,r
+
+def con_circle(X,c_v,c_c,c_r):
+    "(v1-c)^2=r^2; (vertices, centers, radii are variables with same length)"
+    num = len(c_r)
+    row = np.tile(np.arange(num),7)
+    col = np.r_[c_v,c_c,c_r]
+    data = 2*np.r_[X[c_v]-X[c_c],X[c_c]-X[c_v],-X[c_r]]
+    r = np.linalg.norm((X[c_v]-X[c_c]).reshape(-1,3,order='F'),axis=1)**2-X[c_r]**2
     H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
     return H,r
 
@@ -136,6 +198,57 @@ def con_orient(X,Nv,c_vN,c_a,neg=False):
     H = sparse.coo_matrix((data,(row,col)), shape=(num,len(X))) 
     return H,r
 
+def con_orient1(X,c_on,c_vl,c_vr,c_b,neg=False):
+    "on*(vl-vr)=b^2; if neg: on*(vl-vr)=-b^2"
+    if neg:
+        sign = -1
+    else:
+        sign = 1    
+    num = int(len(c_b))
+    row = np.tile(np.arange(num),10)
+    col = np.r_[c_on,c_vl,c_vr,c_b]
+    data = np.r_[X[c_vl]-X[c_vr],X[c_on],-X[c_on],-sign*2*X[c_b]]
+    r = np.einsum('ij,ij->i',X[c_on].reshape(-1,3,order='F'),(X[c_vl]-X[c_vr]).reshape(-1,3,order='F'))
+    r = r-sign*X[c_b]**2
+    H = sparse.coo_matrix((data,(row,col)), shape=(num,len(X))) 
+    return H,r
+
+def con_orient2(X,c_on,n_xyz,c_b,neg=False):
+    "on*n=b^2; if neg: on*n=-b^2; where on and b are variables; but n_xyz is given"
+    if neg:
+        sign = -1
+    else:
+        sign = 1    
+    num = int(len(c_b))
+    row = np.tile(np.arange(num),4)
+    col = np.r_[c_on,c_b]
+    data = np.r_[-sign*n_xyz,2*X[c_b]]
+    r = X[c_b]**2
+    H = sparse.coo_matrix((data,(row,col)), shape=(num,len(X))) 
+    return H,r
+
+def con_ortho(X,c_v1,c_v2,c_n):
+    """
+    n*(v1+v2)=0
+    """
+    num = int(len(c_n)/3)
+    col = np.r_[c_n,c_v1,c_v2]
+    row = np.tile(np.arange(num),9)
+    data = np.r_[X[c_v1]+X[c_v2],X[c_n],X[c_n]]
+    r = np.einsum('ij,ij->i',X[c_n].reshape(-1,3, order='F'),(X[c_v1]+X[c_v2]).reshape(-1,3, order='F'))
+    H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
+    return H,r
+
+def con_orthogonal_2vectors(X,c_n,c_e):
+    "e*n = 0"
+    num = int(len(c_n)/3)
+    row = np.tile(np.arange(num),6)
+    col = np.r_[c_n,c_e]
+    data = np.r_[X[c_e],X[c_n]]
+    H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
+    r = np.einsum('ij,ij->i',X[c_e].reshape(-1,3, order='F'),X[c_n].reshape(-1,3, order='F'))
+    return H,r
+
 def con_diagonal(X,c_v1,c_v3,c_d1):
     "(v1-v3)^2=d1^2"
     num = int(len(c_v1)/3)
@@ -144,6 +257,16 @@ def con_diagonal(X,c_v1,c_v3,c_d1):
     dd = X[c_d1]*np.ones(num,dtype=int)
     data = 2*np.r_[X[c_v1]-X[c_v3],X[c_v3]-X[c_v1],-dd]
     r = np.linalg.norm((X[c_v1]-X[c_v3]).reshape(-1,3,order='F'),axis=1)**2-dd**2
+    H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
+    return H,r
+
+def con_diagonal2(X,c_v1,c_v3,c_ll):
+    "(v1-v3)^2=ll; len(c_ll)==1"
+    num = int(len(c_v1)/3)
+    row = np.tile(np.arange(num),7)
+    col = np.r_[c_v1,c_v3,c_ll*np.ones(num)]
+    data = 2*np.r_[X[c_v1]-X[c_v3],X[c_v3]-X[c_v1],-0.5*np.ones(num)]
+    r = np.linalg.norm((X[c_v1]-X[c_v3]).reshape(-1,3,order='F'),axis=1)**2
     H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
     return H,r
 
