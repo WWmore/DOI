@@ -207,7 +207,7 @@ class MMesh(Mesh):
         "no bdry-polyline but bdry-vertices,which are not regular"
         "if loop, pl[0]==pl[-1]"
         if self._all_rr_polylist is None:
-            self._all_rr_polylist = self.get_rregular_split_list_for_polysegmnet(diag=False)
+            self._all_rr_polylist = self.get_rregular_split_list_for_polysegmnet(is_diagnet=False)
         return self._all_rr_polylist
     ### [vlist1,[vllist1,vrlist1],[innlist1,iinnlist1],[vstart1,vend1] ];
     ### [vlist2,[vllist2,vrlist2],[innlist2,iinnlist2],[vstart2,vend2] ]
@@ -215,7 +215,7 @@ class MMesh(Mesh):
     @property
     def all_rr_diag_polylist(self):
         if self._all_rr_diag_polylist is None:
-            self._all_rr_diag_polylist = self.get_rregular_split_list_for_polysegmnet(diag=True)
+            self._all_rr_diag_polylist = self.get_rregular_split_list_for_polysegmnet(is_diagnet=True)
         return self._all_rr_diag_polylist
     
     @property
@@ -694,10 +694,10 @@ class MMesh(Mesh):
         return [[v,v1,v2,v3,v4], [v[indv],v1[indv],v2[indv],v3[indv],v4[indv]],\
             [M, M_inn], [indM,indM_inn], indv]
 
-    def get_rregular_split_list_for_polysegmnet(self,diag=False,is_poly=False):
+    def get_rregular_split_list_for_polysegmnet(self,is_diagnet=False,is_poly=False):
         "filter/divide the rregular-polyline into 2 class-lists"
         "This is the moset safe one, suitible for any mesh with even singularity"
-        if diag:
+        if is_diagnet:
             v0,v1,v2,v3,v4 = self.rr_star_corner
         else:
             v0,v1,v2,v3,v4 = self.rrv4f4
@@ -1545,7 +1545,7 @@ class MMesh(Mesh):
         #             allplv.pop()
         elif len(o56)==0 and len(self.corner)!=0:
             "schwarzh_02_diag_unitscale_AAG_AAG"        
-            ipl1,ipl2 = self.get_2families_polyline_from_1closed_bdry(diag=diagpoly,
+            ipl1,ipl2 = self.get_2families_polyline_from_1closed_bdry(is_diagnet=diagpoly,
                                                          interval=interval,
                                                          inner=False) ## need to choose True or False
             allplv = ipl1[1] if is_one_or_another else ipl2[1]
@@ -2324,9 +2324,9 @@ class MMesh(Mesh):
     #                 Plot polylines: isolines + diagonals
     #-------------------------------------------------------------------------- 
     
-    def get_quad_mesh_1family_isoline(self,diagnet=False,direction=True,edge=False):
+    def get_quad_mesh_1family_isoline(self,is_diagnet=False,direction=True,edge=False):
         V = self.vertices
-        v1,v2 = self.get_1family_oriented_polyline(diagnet,poly2=direction)
+        v1,v2 = self.get_1family_oriented_polyline(is_diagnet,poly2=direction)
         pl = make_polyline_from_endpoints(V[v1],V[v2])
         if edge:
             "edge_data = np.zeros(self.E)"
@@ -2346,9 +2346,9 @@ class MMesh(Mesh):
             an,vec = V[v1], V[v2]-V[v1]
             return pl,an,vec 
 
-    def get_1family_oriented_polyline(self,diagnet=False,poly2=True,demultiple=True):
+    def get_1family_oriented_polyline(self,is_diagnet=False,poly2=True,demultiple=True):
         "still have problem for the demultiple and oriendted quad faces,bad for thickness"
-        if diagnet:
+        if is_diagnet:
             v,v1,v2,v3,v4 = self.rr_star_corner# in diagonal direction
         else:
             v,v1,v2,v3,v4 = self.ver_star_matrix.T
@@ -2386,12 +2386,12 @@ class MMesh(Mesh):
                 vb = np.delete(vb,ind)  
         return va,vb
      
-    def get_2families_polyline_from_1closed_bdry(self,diag=False,interval=1,
+    def get_2families_polyline_from_1closed_bdry(self,is_diagnet=False,interval=1,
                                                  inner=False,
                                                  is_poly=False,
                                                  is_seg=False):
         "along one bdry for a patch-shape; two bdry for a star-shape"
-        if diag:
+        if is_diagnet:
             v0,v1,v2,v3,v4 = self.rr_star_corner
         else:
             v0,v1,v2,v3,v4 = self.rrv4f4
@@ -2415,7 +2415,7 @@ class MMesh(Mesh):
                     elif v in v3:
                         j = np.where(v3==v)[0]
                     vx = v0[j]
-                    if diag:
+                    if is_diagnet:
                         vvx = np.r_[v,vx]
                         vpl,_ = get_diagonal_polyline_from_2points(self,vvx,is_poly=False)
                     else:
@@ -2434,7 +2434,7 @@ class MMesh(Mesh):
                     elif v in v4:
                         j = np.where(v4==v)[0]
                     vx = v0[j]
-                    if diag:
+                    if is_diagnet:
                         vvx = np.r_[v,vx]
                         vpl,_ = get_diagonal_polyline_from_2points(self,vvx,is_poly=False)
                     else:
@@ -2541,13 +2541,17 @@ class MMesh(Mesh):
     # -------------------------------------------------------------------------
     #                        For ploting
     # -------------------------------------------------------------------------
-    def get_v4_unit_edge(self,rregular=True):
+    def get_v4_unit_edge(self,is_diagnet=False,rregular=True):
         V = self.vertices
         if rregular:
             v,v1,v2,v3,v4 = self.rrv4f4
         else:
             ## v,v1,v2,v3,v4 = self.ver_regular_star.T
             v,v1,v2,v3,v4 = self.ver_star_matrix.T
+        
+        if is_diagnet:
+            v,v1,v2,v3,v4 = self.rr_star_corner
+        
         E1 = V[v1]-V[v]
         E2 = V[v2]-V[v]
         E3 = V[v3]-V[v]
@@ -2562,9 +2566,9 @@ class MMesh(Mesh):
         e4 = E4 / l4[:,None]
         return v,l1,l2,l3,l4,e1,e2,e3,e4
 
-    def get_v4_unit_tangents(self,plot=False,rregular=True):
+    def get_v4_unit_tangents(self,is_diagnet=False,rregular=True,plot=False):
         "only for valence 4, not depends on X"
-        v,l1,l2,l3,l4,e1,e2,e3,e4 = self.get_v4_unit_edge(rregular)
+        v,l1,l2,l3,l4,e1,e2,e3,e4 = self.get_v4_unit_edge(is_diagnet,rregular)
         #v = self.ver_star_matrix[:,0]
         anchor = self.vertices[v]
         t1 = (e1-e3)
@@ -2582,58 +2586,17 @@ class MMesh(Mesh):
             pl2 = make_polyline_from_endpoints(Vl,Vr)
             return pl1,pl2
         return lt1,lt2,ut1,ut2,anchor,angle
-
-    def get_v4_diag_unit_edge(self):
-        V = self.vertices
-        v,v1,v2,v3,v4 = self.rr_star_corner
-        E1 = V[v1]-V[v]
-        E2 = V[v2]-V[v]
-        E3 = V[v3]-V[v]
-        E4 = V[v4]-V[v]
-        l1 = np.linalg.norm(E1, axis=1)
-        l2 = np.linalg.norm(E2, axis=1)
-        l3 = np.linalg.norm(E3, axis=1)
-        l4 = np.linalg.norm(E4, axis=1)
-        e1 = E1 / l1[:,None]
-        e2 = E2 / l2[:,None]
-        e3 = E3 / l3[:,None]
-        e4 = E4 / l4[:,None]     
-        return v,l1,l2,l3,l4,e1,e2,e3,e4
-
-    def get_v4_diag_unit_tangents(self,plot=False):
-        "only for valence 4, not depends on X"
-        v,l1,l2,l3,l4,e1,e2,e3,e4 = self.get_v4_diag_unit_edge()
-        #v,_,_,_,_ = self.rr_star_corner
-        anchor = self.vertices[v]
-        t1 = (e1-e3)
-        t2 = (e2-e4)
-        lt1 = np.linalg.norm(t1,axis=1)
-        lt2 = np.linalg.norm(t2,axis=1)
-        ut1 = t1 / lt1[:,None]
-        ut2 = t2 / lt2[:,None]
-        angle = np.arccos(np.einsum('ij,ij->i', ut1, ut2))*180/np.pi
-        if plot:
-            a,b = (l1+l3)/6.0, (l2+l4)/6.0
-            Vl,Vr = anchor+ut1*a[:,None], anchor-ut1*a[:,None]
-            pl1 = make_polyline_from_endpoints(Vl,Vr)
-            Vl,Vr = anchor+ut2*b[:,None], anchor-ut2*b[:,None] 
-            pl2 = make_polyline_from_endpoints(Vl,Vr)
-            return pl1,pl2           
-        return lt1,lt2,ut1,ut2,anchor,angle
     
-    def get_v4_unit_normal(self,diag=False,rregular=True):
+    def get_v4_unit_normal(self,is_diagnet=False,rregular=True):
         v = self.ver_rrv4f4
-        if diag:
-            _,_,t1,t2,an,_ = self.get_v4_diag_unit_tangents()
-        else:
-            _,_,t1,t2,an,_ = self.get_v4_unit_tangents(rregular=rregular)
+        _,_,t1,t2,an,_ = self.get_v4_unit_tangents(is_diagnet,rregular)
         n = np.cross(t1,t2)
         un = n / np.linalg.norm(n,axis=1)[:,None]
         return v,an, un
     
-    def get_v4_orient_unit_normal(self,diag=False,rregular=True):
+    def get_v4_orient_unit_normal(self,is_diagnet=False,rregular=True):
         "updated for each time, orientn; defined at rrv4f4"
-        v,an,vN = self.get_v4_unit_normal(diag,rregular)
+        v,an,vN = self.get_v4_unit_normal(is_diagnet,rregular)
         Nv = self.vertex_normals()[v]
         i = np.where(np.einsum('ij,ij->i',Nv,vN)<0)[0]
         vN[i] = -vN[i]
@@ -2650,6 +2613,33 @@ class MMesh(Mesh):
         print('min=', '%.2g' % np.min(A))
         print('----------------------------------')
         #return np.max(A),np.min(A),np.mean(A),np.median(A)
+
+    def get_net_osculating_tangents(self,is_diagnet=False,show=False,printerr=False):
+        "if is_diagnet: vabcd; else v1234"
+        V = self.vertices
+        if is_diagnet:
+            v,va,vb,vc,vd = self.rr_star_corner# in diagonal direction
+            V0,V1,V2,V3,V4 = V[v],V[va],V[vb],V[vc],V[vd]
+        else:
+            v,v1,v2,v3,v4 =self.rrv4f4
+            V0,V1,V2,V3,V4 = V[v],V[v1],V[v2],V[v3],V[v4]
+        ll1 = np.linalg.norm(V1-V0,axis=1)**2
+        ll2 = np.linalg.norm(V2-V0,axis=1)**2
+        ll3 = np.linalg.norm(V3-V0,axis=1)**2
+        ll4 = np.linalg.norm(V4-V0,axis=1)**2
+        t1 = (V3-V0)*ll1[:,None]-(V1-V0)*ll3[:,None]
+        t2 = (V4-V0)*ll2[:,None]-(V2-V0)*ll4[:,None]
+        lut1 = np.linalg.norm(t1,axis=1)
+        lut2 = np.linalg.norm(t2,axis=1)
+        ut1 = t1 / lut1[:,None]
+        ut2 = t2 / lut2[:,None]
+        if show:
+            return V0,ut1,ut2
+        if printerr:
+            cos = np.einsum('ij,ij->i', ut1,ut2)
+            A = np.arccos(cos)*180/np.pi
+            return A
+        return [ll1,ll2,ll3,ll4],[t1,t2],[lut1,ut1],[lut2,ut2]
 
     def get_isoline_osculating_normal(self,is_diag=False,
                                       is_all_n=False,is_n=False,is_on=False):

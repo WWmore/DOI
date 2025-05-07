@@ -12,8 +12,8 @@ from scipy import sparse
 #------------------------------------------------------------------------------
 from archgeolab.constraints.constraints_basic import column3D,con_edge,\
     con_unit,con_constl,con_equal_length,con_symmetry,\
-    con_planarity,con_unit_normal,con_orient,con_diagonal,\
-    con_equal_opposite_angle,con_dependent_vector,\
+    con_planarity,con_unit_normal,con_diagonal,con_osculating_tangent,\
+    con_equal_opposite_angle,con_dependent_vector,con_cross,\
     con_constangle2,con_constangle3,con_constangle4,con_positive,con_negative,\
     con_orient,con_orient1,con_orient2,con_ortho,con_orthogonal_2vectors,\
     con_diagonal2,con_circle
@@ -21,8 +21,7 @@ from archgeolab.constraints.constraints_basic import column3D,con_edge,\
 """
 from archgeolab.constraints.constraints_net import 
     con_unit_edge,con_orient_rr_vn,con_orthogonal_midline,\
-    con_anet,con_anet_diagnet,con_snet,con_snet_diagnet,\
-    con_gnet,con_gnet_diagnet
+    con_anet,con_anet_diagnet,con_snet,con_gnet,
     con_doi
         
 """
@@ -31,17 +30,12 @@ from archgeolab.constraints.constraints_net import
     #                Unit Edge Vectors, Unit Orient Normals:
     #-------------------------------------------------------------------------- 
 
-def con_unit_edge(rregular=False,**kwargs): 
+def con_unit_edge(is_diagnet=False,rregular=True,**kwargs): 
     """ unit_edge / unit_diag_edge_vec
     X += [l1,l2,l3,l4,ue1,ue2,ue3,ue4]; exists multiples between ue1,ue2,ue3,ue4
     (vi-v) = li*ui, ui**2=1, (i=1,2,3,4)
     """
-    if kwargs.get('unit_diag_edge_vec'):
-        w = kwargs.get('unit_diag_edge_vec')
-        diag=True   
-    elif kwargs.get('unit_edge_vec'):
-        w = kwargs.get('unit_edge_vec')
-        diag=False
+    diag = True if is_diagnet else False
     mesh = kwargs.get('mesh')
     X = kwargs.get('X')
     N5 = kwargs.get('N5')
@@ -83,12 +77,51 @@ def con_unit_edge(rregular=False,**kwargs):
     r = np.r_[r1,r2,r3,r4,ru1,ru2,ru3,ru4]
     
     #print('E1234:', np.sum(np.square((H*X)-r)))
-    return H*w,r*w
+    return H, r
 
+def con_osculating_tangents(is_diagnet=False,**kwargs):
+    """X +=[ll1,ll2,ll3,ll4,lt1,lt2,t1,t2]  (defined at rrv4f4)
+    t1,t2 are built from con_osculating_tangent
+    """
+    mesh = kwargs.get('mesh')
+    X = kwargs.get('X')
+    Noscut = kwargs.get('Noscut')
+    
+    if is_diagnet:
+        v,va,vb,vc,vd = mesh.rr_star_corner# in diagonal direction
+        c_v = column3D(v,0,mesh.V)
+        c_1 = column3D(va,0,mesh.V)
+        c_2 = column3D(vb,0,mesh.V)
+        c_3 = column3D(vc,0,mesh.V)
+        c_4 = column3D(vd,0,mesh.V)
+    else:
+        v,v1,v2,v3,v4 = mesh.rrv4f4
+        c_v = column3D(v,0,mesh.V)
+        c_1 = column3D(v1,0,mesh.V)
+        c_2 = column3D(v2,0,mesh.V)
+        c_3 = column3D(v3,0,mesh.V)
+        c_4 = column3D(v4,0,mesh.V)         
+    num = len(v)
+    arr,arr3 = np.arange(num),np.arange(3*num)
+    s = Noscut - 12*num
+    c_ll1 = s+arr
+    c_ll2,c_ll3,c_ll4 = c_ll1+num, c_ll1+2*num, c_ll1+3*num
+    c_lt1,c_lt2 = c_ll1+4*num, c_ll1+5*num
+    c_t1,c_t2 = s+6*num+arr3, s+9*num+arr3
+    H1,r1 = con_osculating_tangent(X,c_v,c_1,c_3,c_ll1,c_ll3,c_lt1,c_t1,num)
+    H2,r2 = con_osculating_tangent(X,c_v,c_2,c_4,c_ll2,c_ll4,c_lt2,c_t2,num)
+    H = sparse.vstack((H1,H2))
+    r = np.r_[r1,r2]
+    return H,r
 
-def con_orient_rr_vn(**kwargs):
+def con_orient_rr_vn(is_osculating_tangent=False,**kwargs):
     """ X +=[vN, a], given computed Nv,which is defined at rr_vs
+    Default: 
         vN *(e1-e3) = vN *(e2-e4) = 0; vN^2=1
+        vN*Nv=a^2
+    elif is_osculating_tangent:
+        X += [vN,a]
+        vN * t1 = vN * t2 = 0; vN^2=1  <==> vN = t1 x t2
         vN*Nv=a^2
     ==> vN is unit vertex-normal defined by t1xt2, **orient same with Nv**
     """
@@ -98,16 +131,22 @@ def con_orient_rr_vn(**kwargs):
     Norient = kwargs.get('Norient')
     v = mesh.ver_rrv4f4
     Nv = mesh.vertex_normals()[v]
-    num = mesh.num_rrv4f4
+    num = len(v) ##= mesh.num_rrv4f4
     arr,arr3 = np.arange(num),np.arange(3*num)
     c_n = arr3 + Norient-4*num
     c_a = arr + Norient-num
-    c_ue1 = column3D(arr,N5-12*num,num)
-    c_ue2 = column3D(arr,N5-9*num,num)
-    c_ue3 = column3D(arr,N5-6*num,num)
-    c_ue4 = column3D(arr,N5-3*num,num)
-    "vN should be oriented with oriented-vertex-normal"
-    Hvn,rvn = con_unit_normal(X,c_ue1,c_ue2,c_ue3,c_ue4,c_n)
+    
+    if is_osculating_tangent:
+        s = kwargs.get('Noscut')- 12*num
+        c_t1,c_t2 = s+6*num+arr3, s+9*num+arr3
+        Hvn,rvn = con_cross(X,c_t1,c_t2,c_n)
+    else:
+        c_ue1 = column3D(arr,N5-12*num,num)
+        c_ue2 = column3D(arr,N5-9*num,num)
+        c_ue3 = column3D(arr,N5-6*num,num)
+        c_ue4 = column3D(arr,N5-3*num,num)
+        "vN should be oriented with oriented-vertex-normal"
+        Hvn,rvn = con_unit_normal(X,c_ue1,c_ue2,c_ue3,c_ue4,c_n)
     
     "make sure the variable vN has same orientation with Nv:"
     Ho,ro = con_orient(X,Nv,c_n,c_a,neg=False)
@@ -428,6 +467,8 @@ def con_kite_diagnet(is_transpose=False,**kwargs):
            
     Kite_diagnet: |va-v|=|vd-v|, |vb-v|=|vc-v| & 
     (more stronger, but include boundary faces) |v1-v2|=|v1-v4|, |v2-v3|=|v4-v3|
+    
+    is_transpose: |va-v|=|vb-v|, |vc-v|=|vd-v| & |v2-v1|=|v2-v3|, |v4-v1|=|v4-v3|
     """
     w = kwargs.get('Kite_diagnet')
     mesh = kwargs.get('mesh')
@@ -555,7 +596,7 @@ def con_dgpc(rregular=False,polyline_direction=False,**kwargs):
     #--------------------------------------------------------------------------  
 def con_CGC(is_diagnet=False,is_rrvstar=False,**kwargs):
     """CGC_net: net curves of constant geodesic curvature, kg1=|kg2|=const.
-
+    
     """
     w = kwargs.get('CGC')
     mesh = kwargs.get('mesh')
@@ -579,24 +620,23 @@ def con_CGC(is_diagnet=False,is_rrvstar=False,**kwargs):
     c_v4 = column3D(v4,0,V)
     arr1 = np.arange(numv)
     arr3 = np.arange(3*numv)   
+    
+    return H,r
 
-def _con_gnet(X,w,c_ue1,c_ue2,c_ue3,c_ue4):
-    H1,r1 = con_equal_opposite_angle(X,c_ue1,c_ue2,c_ue3,c_ue4)
-    H2,r2 = con_equal_opposite_angle(X,c_ue2,c_ue3,c_ue4,c_ue1)
-    H, r = sparse.vstack((H1, H2)), np.r_[r1,r2]
-    return H*w, r*w
 
-def con_gnet(rregular=True,is_diagnet=False,**kwargs):
+def con_gnet(rregular=True,**kwargs):
     """
     Gnet: based on con_unit_edge(diag=False)
     Gnet_diagnet: based on con_unit_edge(diag=True)
     e1*e2-e3*e4=0; e2*e3-e1*e4=0
     """
-    if is_diagnet:
-        w = kwargs.get('Gnet_diagnet')
-    else:
-        w = kwargs.get('Gnet')
-        
+    def _con_gnet(X,w,c_ue1,c_ue2,c_ue3,c_ue4):
+        H1,r1 = con_equal_opposite_angle(X,c_ue1,c_ue2,c_ue3,c_ue4)
+        H2,r2 = con_equal_opposite_angle(X,c_ue2,c_ue3,c_ue4,c_ue1)
+        H, r = sparse.vstack((H1, H2)), np.r_[r1,r2]
+        return H*w, r*w
+    
+    w = kwargs.get('Gnet')
     mesh = kwargs.get('mesh')
     X = kwargs.get('X')
     N5 = kwargs.get('N5')
@@ -633,6 +673,7 @@ def con_snet(orientrn,is_rrvstar=True,is_diagnet=False,
     since P(Vx,Vy,Vz) satisfy the sphere eq. and the normalizated eq., so that
         N ^2=1
     """
+    w = kwargs.get('Snet')
     Nsnet = kwargs.get('Nsnet')
     mesh = kwargs.get('mesh')
     X = kwargs.get('X')
@@ -642,10 +683,8 @@ def con_snet(orientrn,is_rrvstar=True,is_diagnet=False,
     if is_rrvstar:  ##default=True
         "new for SSGweb-project"
         if is_diagnet:
-            w = kwargs.get('Snet_diagnet')
             v0,v1,v2,v3,v4 = mesh.rr_star_corner
         else:
-            w = kwargs.get('Snet')
             v0,v1,v2,v3,v4 = mesh.rrv4f4
         #orientrn = orientrn[mesh.ind_rr_star_v4f4] ##below should be the same
         ##print(len(mesh.ind_rr_star_v4f4),len(v0))
@@ -825,10 +864,7 @@ def con_anet(rregular=False,is_diagnet=False,**kwargs):
     X += [ni]
     ni * (vij - vi) = 0
     """
-    if is_diagnet:
-        w = kwargs.get('Anet_diagnet')
-    else:
-        w = kwargs.get('Anet')
+    w = kwargs.get('Anet')
     mesh = kwargs.get('mesh')
     X = kwargs.get('X')
     

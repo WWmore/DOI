@@ -135,7 +135,8 @@ class DOINet(GeolabComponent):
     
     GPC_net = Bool(label='GPC')
     
-    switch_GO_or_OG = Bool(True,label='_GO|OG_')  ## need to choose when window opens
+    switch_GO_or_OG = Bool(True,label='_GO|OG_')  ## need to choose when window opens; choose geodesic-isoline direction
+    switch_diag_or_ctrl = Bool(False,label='_Diag|Ctrl_') ## need to choose when window opens; choose on diagonal net or control net
     
     DOI_net = Bool(label='DOI')
     is_DOI_SIR = Bool(label='is_DOI-SIR')
@@ -153,26 +154,23 @@ class DOINet(GeolabComponent):
     button_align_Pnet = Button(label='AlignPnet')
     
     CGC_net = Bool(label='CGC')
-    CGC_diagnet = Bool(label='diagCGC')
     Gnet = Bool(label='Gnet') 
-    Gnet_diagnet = Bool(label='diagGnet')
       
     CNC_net = Bool(label='CNC') ##Snet with const.r
-    CNC_diagnet = Bool(label='diagCNC')
     Snet = Bool(label='Snet')
-    Snet_diagnet = Bool(label='SnetDiag')
-    Snet_orient = Bool(True,label='Orient') ##only under Snet/Snet_diagnet
-    Snet_constR = Bool(False,label='constR') ##only under Snet/Snet_diagnet
+    Snet_orient = Bool(True,label='Orient')
+    Snet_constR = Bool(False,label='constR')
     if_uniqR = Bool(False) 
     Snet_constR_assigned = Float(label='const.R')
     button_CMC_mesh = Button(label='CMC')
     
     Anet = Bool(label='Anet')  
-    Anet_diagnet = Bool(label='AnetDiag')
     button_minimal_mesh = Button(label='Minimal')
+    
+    oscu_rrv_tangent = Bool(False,label='oscuT')
 
     ##Pseudogeodesic-net:
-    orient_rr_vn = Bool(False,label='OrientVN') ##TODO: need to choose True
+    orient_rrv_normal = Bool(False,label='orientN')
     Pseudogeodesic_net = Bool(label='Pnet')
 
     pseudogeo_allSameAngle = Bool(label='uniqAngle')
@@ -189,6 +187,8 @@ class DOINet(GeolabComponent):
     
 
     #--------------Plotting: -----------------------------
+    show_oscu_tangent = Bool(label='oscuT')
+    
     show_midpoint_edge1 = Bool(label='E1')
     show_midpoint_edge2 = Bool(label='E2')
     show_midpoint_polyline1 = Bool(label='Ply1')
@@ -241,24 +241,24 @@ class DOINet(GeolabComponent):
     #---------------------------------------------------------
     Group(## 1st-panel
         VGroup(
-              HGroup(Item('switch_GO_or_OG'),
+              HGroup('switch_GO_or_OG', 'switch_diag_or_ctrl',
+                     'oscu_rrv_tangent',
+                     'orient_rrv_normal',
                      Item('button_clear_constraint',show_label=False)),    
               #HGroup('orthogonal','GPC_net'),
               HGroup('DOI_net','is_DOI_SIR','is_DOI_SIR_diagKite'),
               HGroup('Kite_net','is_Kite_diagGPC','is_Kite_diagGPC_SIR'),
-              HGroup('CGC_net','CGC_diagnet',
-                     'Gnet','Gnet_diagnet',
+              HGroup('CGC_net',
+                     'Gnet',
                      ),
-              HGroup('CNC_net','CNC_diagnet',
-                     'Anet','Anet_diagnet',),
+              HGroup('CNC_net','Anet',),
               # HGroup('Snet',
-              #        'Snet_diagnet',
               #        #'Snet_orient',
               #        'Snet_constR',
               #        Item('if_uniqR',show_label=False),
               #        'Snet_constR_assigned'),
 
-              HGroup('Pseudogeodesic_net','pseudogeo_orient','orient_rr_vn'),
+              HGroup('Pseudogeodesic_net','pseudogeo_orient'),
               # HGroup('pseudogeo_1st',
               #        'pseudogeo_2nd',),
               HGroup('pseudogeo_allSameAngle',
@@ -287,7 +287,8 @@ class DOINet(GeolabComponent):
 
         label='Opt.Net',show_border=True),
         #------------------------------------------------  
-        VGroup(HGroup('show_midpoint_edge1',
+        VGroup(HGroup('show_oscu_tangent',
+                      'show_midpoint_edge1',
                       'show_midpoint_edge2',
                       'show_midpoint_polyline1',
                       'show_midpoint_polyline2',
@@ -995,23 +996,40 @@ class DOINet(GeolabComponent):
         
         self.CGC_net = False
         self.Gnet = False
-        self.Gnet_diagnet = False
           
         self.CNC_net = False
         self.Snet = False
-        self.Snet_diagnet = False
         self.Snet_constR = False
         self.if_uniqR = False
         
         self.Anet = False
-        self.Anet_diagnet = False
         
         self.Pseudogeodesic_net = False
-        
-        "NOTE: if remove Gnet(diag), must also remove unit_edge(diag)"
-        self.optimizer.set_weight('unit_edge_vec', 0)
-        self.optimizer.set_weight('unit_diag_edge_vec', 0)
-        
+
+
+
+    @on_trait_change('orient_rrv_normal')
+    def set_orient_normals(self):
+        if self.orient_rrv_normal:
+            self.optimizer.orient_rrv_normal = True
+            if self.oscu_rrv_tangent:
+                self.optimizer.oscu_rrv_tangent = True
+            else:
+                self.optimizer.unit_edge_vec = True
+        else:
+            self.optimizer.orient_rrv_normal = False
+            self.optimizer.oscu_rrv_tangent = False
+            self.optimizer.unit_edge_vec = False
+            
+    @on_trait_change('CGC_net')
+    def set_CGC_net(self): 
+        if self.CGC_net:
+            self.oscu_rrv_tangent = True
+            self.orient_rrv_normal = True
+        else:
+            self.oscu_rrv_tangent = False
+            self.orient_rrv_normal = False
+            
     @on_trait_change('CNC_net')
     def set_CNC_net(self): 
         if self.CNC_net:
@@ -1022,29 +1040,33 @@ class DOINet(GeolabComponent):
             self.Snet = False
             self.Snet_orient = False
             self.Snet_constR = False
+            
+    
+    # @on_trait_change('pseudogeo_1st') ##no use
+    # def set_pseudogeo_1st(self): 
+    #     if self.pseudogeo_1st:
+    #         self.orient_rrv_normal = True
+    #     else:
+    #         self.orient_rrv_normal = False
 
-    @on_trait_change('CNC_diagnet')
-    def set_CNC_diagnet(self): 
-        if self.CNC_diagnet:
-            self.Snet_diagnet = True
-            self.Snet_orient = True
-            self.Snet_constR = True
-        else:
-            self.Snet_diagnet = False
-            self.Snet_orient = False
-            self.Snet_constR = False
-
+    # @on_trait_change('pseudogeo_2nd') ##no use
+    # def set_pseudogeo_2nd(self): 
+    #     if self.pseudogeo_2nd:
+    #         self.orient_rrv_normal = True
+    #     else:
+    #         self.orient_rrv_normal = False
+            
     @on_trait_change('Pseudogeodesic_net')
     def set_Pnet(self): 
         if self.Pseudogeodesic_net:
-            self.pseudogeo_1st = True
-            self.pseudogeo_2nd = True
-            self.orient_rr_vn = True
+            self.pseudogeo_1st = True ##based on self.orient_rrv_normal
+            self.pseudogeo_2nd = True ##based on self.orient_rrv_normal
+            self.orient_rrv_normal = True
             self.pseudogeo_orient = True  
         else:
             self.pseudogeo_1st = False
             self.pseudogeo_2nd = False
-            self.orient_rr_vn = False
+            self.orient_rrv_normal = False
             self.pseudogeo_orient = False
             
     @on_trait_change('button_minimal_mesh')
@@ -1092,9 +1114,9 @@ class DOINet(GeolabComponent):
         self.is_DOI_SIR_diagKite = True
         self.Pseudogeodesic_net = True
 
-    @on_trait_change('switch_GO_or_OG')
-    def switch_GO_or_OG_net(self):
-        self.optimizer.is_GO_or_OG = self.switch_GO_or_OG           
+    # @on_trait_change('switch_GO_or_OG')
+    # def switch_GO_or_OG_net(self):
+    #     self.optimizer.is_GO_or_OG = self.switch_GO_or_OG           
     #---------------------------------------------------------        
     #                       Ploting
     #---------------------------------------------------------         
@@ -1233,6 +1255,17 @@ class DOINet(GeolabComponent):
     #               CGC_net / Gnet - Ploting
     #---------------------------------------------------------
 
+    @on_trait_change('show_oscu_tangent')
+    def plot_orthoscu_tangent(self):
+        name = 'oscut'
+        if self.show_oscu_tangent:  
+            an,t1,t2 = self.optimizer.get_osculating_tangents()
+            self.meshmanager.plot_vectors(anchor=an,vectors=t1,position='tail',
+                                          color = 'r',name = name+'1') 
+            self.meshmanager.plot_vectors(anchor=an,vectors=t2,position='tail',
+                                          color = 'black',name = name+'2') 
+        else:
+            self.meshmanager.remove([name+'1',name+'2'])
             
     #---------------------------------------------------------        
     #               CNC_net / Anet / Snet - Ploting:
@@ -1241,12 +1274,7 @@ class DOINet(GeolabComponent):
     def plot_snet_center(self):
         name = 'snetc'
         if self.show_snet_center:
-            is_diag = False
-            if self.Snet:
-                is_diag = False
-            elif self.Snet_diagnet:
-                is_diag = True
-            C,data = self.optimizer.get_snet_data(is_diag,center=True)
+            C,data = self.optimizer.get_snet_data(self.switch_diag_or_ctrl,center=True)
             r = self.meshmanager.r
             self.meshmanager.plot_glyph(points=C,vertex_data=data,
                                         color='blue-red',lut_range='0:+',
@@ -1258,12 +1286,7 @@ class DOINet(GeolabComponent):
     def plot_snet_normal(self):
         name = 'snetn'
         if self.show_snet_normal:
-            is_diag = False
-            if self.Snet:
-                is_diag = False
-            elif self.Snet_diagnet:
-                is_diag = True
-            an,N = self.optimizer.get_snet_data(is_diag,normal=True)
+            an,N = self.optimizer.get_snet_data(self.switch_diag_or_ctrl,normal=True)
             self.meshmanager.plot_vectors(anchor=an,vectors=N,#normal neg or pos
                                           position='tail',color=(162,20,47),
                                           name=name)
@@ -1278,12 +1301,7 @@ class DOINet(GeolabComponent):
     def plot_snet_tangent(self):
         name = 'snett'
         if self.show_snet_tangent:
-            is_diag = False
-            if self.Snet:
-                is_diag = False
-            elif self.Snet_diagnet:
-                is_diag = True
-            an,t1,t2 = self.optimizer.get_snet_data(is_diag,tangent=True)
+            an,t1,t2 = self.optimizer.get_snet_data(self.switch_diag_or_ctrl,tangent=True)
 
             self.meshmanager.plot_vectors(anchor=an,vectors=t1,position='center',
                                           glyph_type = 'line',color='black',
@@ -1351,7 +1369,7 @@ class DOINet(GeolabComponent):
         name = 'ps-geo'
         if self.show_pseudogeo_1st_crv or self.show_pseudogeo_2nd_crv:
             #work well, but without bdry-poly
-            pl1,pl2,_,_,_,_ = self.mesh.get_rregular_split_list_for_polysegmnet(diag=False,is_poly=True)
+            pl1,pl2,_,_,_,_ = self.mesh.get_rregular_split_list_for_polysegmnet(is_diagnet=False,is_poly=True)
             #pl1,pl2 = get_plot_ordered_isolines(self.mesh)
             if self.show_pseudogeo_1st_crv:
                 self.meshmanager.plot_polyline(pl1,color=(240,114,114),
@@ -1412,6 +1430,7 @@ class DOINet(GeolabComponent):
         else: 
             self.meshmanager.remove([name+'1e',name+'1f',name+'2e',name+'2f'])       
 
+            
     @on_trait_change('show_orient_vn')
     def plot_gonet_pseudogeodesic_vertexNormal(self):
         name = 'ps-geo-vn'
@@ -1539,6 +1558,9 @@ class DOINet(GeolabComponent):
         self.optimizer.set_weight('boundary_z0', self.boundary_z0)
         
         # ---------------------------------------------------------------------
+        self.optimizer.oscu_rrv_tangent = self.oscu_rrv_tangent
+        self.optimizer.orient_rrv_normal = self.orient_rrv_normal
+        
         self.optimizer.set_weight('orthogonal',  self.orthogonal*1)
         
         self.optimizer.set_weight('DOI', self.DOI_net)
@@ -1549,25 +1571,17 @@ class DOINet(GeolabComponent):
         self.optimizer.is_Kite_diagGPC = self.is_Kite_diagGPC
         self.optimizer.is_Kite_diagGPC_SIR = self.is_Kite_diagGPC_SIR
         
+        self.optimizer.set_weight('Gnet', self.Gnet)
         self.optimizer.set_weight('CGC', self.CGC_net)
-        self.optimizer.set_weight('CGC_diagnet', self.CGC_diagnet)
-        self.optimizer.set_weight('Pnet', self.Pseudogeodesic_net)
-
+        
+        self.optimizer.set_weight('Anet',  self.Anet)
         self.optimizer.set_weight('Snet', self.Snet)
-        self.optimizer.set_weight('Snet_diagnet', self.Snet_diagnet)
         self.optimizer.set_weight('Snet_orient', self.Snet_orient)
         self.optimizer.set_weight('Snet_constR', self.Snet_constR)
         self.optimizer.if_uniqradius = self.if_uniqR
         self.optimizer.assigned_snet_radius = self.Snet_constR_assigned
-        
-        self.optimizer.set_weight('Anet',  self.Anet)
-        self.optimizer.set_weight('Anet_diagnet',  self.Anet_diagnet)
-        
-        self.optimizer.set_weight('Gnet', self.Gnet)
-        self.optimizer.set_weight('Gnet_diagnet', self.Gnet_diagnet)
 
         self.optimizer.set_weight('Pnet', self.Pseudogeodesic_net)
-        self.optimizer.orient_rr_vn = self.orient_rr_vn
         self.optimizer.set_weight('pseudogeo_1st',self.pseudogeo_1st)
         self.optimizer.set_weight('pseudogeo_2nd',self.pseudogeo_2nd)
         self.optimizer.is_psangle1 = self.is_psangle1
@@ -1576,6 +1590,9 @@ class DOINet(GeolabComponent):
         self.optimizer.pseudogeo_2nd_constangle = self.pseudogeo_2nd_constangle
         self.optimizer.is_pseudogeo_allSameAngle = self.pseudogeo_allSameAngle        
         self.optimizer.is_pseudogeo_orient = self.pseudogeo_orient
+        
+        self.optimizer.is_GO_or_OG = self.switch_GO_or_OG 
+        self.optimizer.is_diag_or_ctrl = self.switch_diag_or_ctrl
 
     # -------------------------------------------------------------------------
     #                         Reset + Optimization

@@ -14,7 +14,8 @@ from scipy import sparse
 from constraints_basic import 
     column3D,con_edge,con_unit,con_constl,con_equal_length,con_symmetry,\
     con_planarity,con_planarity_constraints,con_unit_normal,
-    con_orient,con_orient1,con_orient2,con_ortho,con_orthogonal_2vectors,
+    con_orient,con_orient1,con_orient2,con_cross,con_osculating_tangent,
+    con_ortho,con_orthogonal_2vectors,
     con_dependent_vector,con_equal_opposite_angle,
     con_constangle2,con_constangle3,con_constangle4,con_positive,con_negative,\
     con_diagonal2,con_circle
@@ -227,6 +228,30 @@ def con_orient2(X,c_on,n_xyz,c_b,neg=False):
     H = sparse.coo_matrix((data,(row,col)), shape=(num,len(X))) 
     return H,r
 
+def con_cross(X,c_a,c_b,c_n):
+    "n = a x b = (a2b3-a3b2,a3b1-a1b3,a1b2-a2b3)"
+    num = int(len(c_a)/3)
+    arr = np.arange(num)
+    one = np.ones(num)
+    c_ax,c_ay,c_az = c_a[:num],c_a[num:2*num],c_a[2*num:]
+    c_bx,c_by,c_bz = c_b[:num],c_b[num:2*num],c_b[2*num:]
+    c_nx,c_ny,c_nz = c_n[:num],c_n[num:2*num],c_n[2*num:]
+    
+    row = np.tile(arr,5)
+    def _cross(n1,a2,b3,a3,b2):
+        "n1 = a2b3-a3b2"
+        col = np.r_[a2,b3,a3,b2,n1]
+        data = np.r_[X[b3],X[a2],-X[b2],-X[a3],-one]
+        r = X[a2]*X[b3]-X[a3]*X[b2]
+        H = sparse.coo_matrix((data,(row,col)), shape=(num,len(X))) 
+        return H,r
+    H1,r1 = _cross(c_nx,c_ay,c_bz,c_az,c_by)
+    H2,r2 = _cross(c_ny,c_az,c_bx,c_ax,c_bz)
+    H3,r3 = _cross(c_nz,c_ax,c_by,c_ay,c_bx)
+    H = sparse.vstack((H1,H2,H3))
+    r = np.r_[r1,r2,r3]
+    return H,r
+
 def con_ortho(X,c_v1,c_v2,c_n):
     """
     n*(v1+v2)=0
@@ -247,6 +272,31 @@ def con_orthogonal_2vectors(X,c_n,c_e):
     data = np.r_[X[c_e],X[c_n]]
     H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
     r = np.einsum('ij,ij->i',X[c_e].reshape(-1,3, order='F'),X[c_n].reshape(-1,3, order='F'))
+    return H,r
+
+def con_osculating_tangent(X,c_v,c_v1,c_v3,c_ll1,c_ll3,c_lt,c_t,num):
+    """ [ll1,ll3,lt,t]
+        lt*t = l1**2*(V3-V0) - l3**2*(V1-V0)
+        t^2=1
+    <===>
+        ll1 = l1**2 = (V1-V0)^2
+        ll3 = l3**2 = (V3-V0)^2
+        ll1 * (v3-v0) - ll3 * (v1-v0) - t*l = 0
+        t^2=1
+    """
+    col = np.r_[c_v,c_v1,c_v3,np.tile(c_ll1,3),np.tile(c_ll3,3),c_t,np.tile(c_lt,3)]
+    row = np.tile(np.arange(3*num),7)
+    d_l1, d_l3 = X[np.tile(c_ll1,3)], X[np.tile(c_ll3,3)]
+    d_v,d_v1,d_v3 = X[c_v], X[c_v1], X[c_v3]
+    data = np.r_[-d_l1+d_l3, -d_l3, d_l1, d_v3-d_v, d_v-d_v1, -X[np.tile(c_lt,3)],-X[c_t]]
+    H = sparse.coo_matrix((data,(row,col)), shape=(3*num,len(X)))
+    r = (d_v3-d_v)*X[np.tile(c_ll1,3)]-(d_v1-d_v)*X[np.tile(c_ll3,3)]
+    r -= X[np.tile(c_lt,3)]*X[c_t]
+    Hl1,rl1 = con_diagonal2(X,c_v,c_v1,c_ll1)
+    Hl3,rl3 = con_diagonal2(X,c_v,c_v3,c_ll3)
+    Hu,ru = con_unit(X, c_t)
+    H = sparse.vstack((H,Hl1,Hl3,Hu))
+    r = np.r_[r,rl1,rl3,ru]
     return H,r
 
 def con_diagonal(X,c_v1,c_v3,c_d1):
