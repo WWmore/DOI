@@ -39,7 +39,7 @@ if __name__ == '__main__':
 
     file = snet +r'/cmc1.obj'
     file = rot +r'/conical1_diagKite.obj'
-    #file = rot +r'/chebyshev_sphere.obj'
+    file = rot +r'/chebyshev_sphere_cut.obj'
     
     #file =r'/Users/wanghui/Desktop/geometrylab7/obj_rotation/rot1.obj'
     #----------------------------------------

@@ -13,16 +13,17 @@ import itertools
 # -----------------------------------------------------------------------------
 from geometrylab.optimization.guidedprojectionbase import GuidedProjectionBase
 
+from geometrylab.geometry.circle import circle_three_points
+
 from archgeolab.constraints.constraints_basic import con_planarity_constraints
 
 from archgeolab.constraints.constraints_fairness import con_fairness_4th_different_polylines
 
 from archgeolab.constraints.constraints_net import con_unit_edge,con_orient_rr_vn,\
-    con_osculating_tangents,con_gnet,\
+    con_osculating_tangents,con_gnet,con_CGC,\
     con_orthogonal_midline,con_anet,con_snet,con_doi,con_doi__freeform,\
     con_kite,con_pseudogeodesic_pattern
-    #,con_cgc,con_pnet
-
+    
 from archgeolab.constraints.constraints_glide import con_glide_in_plane,\
     con_alignment,con_alignments,con_selected_vertices_glide_in_one_plane,\
     con_fix_vertices,con_sharp_corner
@@ -50,7 +51,7 @@ class GP_DOINet(GuidedProjectionBase):
     
     _Noscut = 0
     _Norient = 0
-    
+    _Ncgc = 0
     _Nanet = 0
     _Nsnet,_Ns_n,_Ns_r = 0,0,0
     _Nsdnet = 0
@@ -210,9 +211,6 @@ class GP_DOINet(GuidedProjectionBase):
         self.set_weight('gliding', 10 * self.max_weight)
         if self.get_weight('fixed_corners') != 0:
             self.set_weight('fixed_corners', 10 * self.max_weight)
-
-        if self.get_weight('Gnet'):
-            self.unit_edge_vec=True
           
     def set_dimensions(self): # Huinote: be used in guidedprojectionbase
         "X:= [Vx,Vy,Vz]"
@@ -225,6 +223,7 @@ class GP_DOINet(GuidedProjectionBase):
         Noscut = N
         Norient = N
 
+        Ncgc = N
         Nanet = N
         Nsnet = Ns_n = Ns_r = N
         
@@ -236,28 +235,33 @@ class GP_DOINet(GuidedProjectionBase):
             N += 3*F
             N1 = N2 = N3 = N4 = N
 
-        if self.unit_edge_vec: #Gnet, AGnet
+        if self.unit_edge_vec: #for Gnet, AGnet; but not for CGC
             "X+=[le1,le2,le3,le4,ue1,ue2,ue3,ue4]"
             "for Anet, AGnet, DGPC"
-            N += 16*self.mesh.num_rrv4f4
+            N += 16*num_rrstar
             N5 = N
         
-        if self.oscu_rrv_tangent:
+        if self.oscu_rrv_tangent: #CGC
             "X +=[ll1,ll2,ll3,ll4,lu1,lu2,u1,u2]"
-            N += 12*self.mesh.num_rrv4f4
+            N += 12*num_rrstar
             Noscut = N  
         
-        if self.orient_rrv_normal:
+        if self.orient_rrv_normal: #CGC
             "X+=[vn, a], vN * Nv = a^2>=0; Nv is given orient-vertex-normal"
             N += 4*num_rrstar
             Norient = N
 
+        if self.get_weight('CGC'):
+            "X += [Cg1,Cg2, rho_g]"
+            N += 6*num_rrstar + 2*num_rrstar
+            Ncgc = N
+
         if self.get_weight('Anet'):
-            N += 3*self.mesh.num_rrv4f4#3*num_regular
+            N += 3*num_rrstar
             Nanet = N
 
         if self.get_weight('Snet'):
-            num_snet = self.mesh.num_rrv4f4 
+            num_snet = num_rrstar
             N += 11*num_snet  
             Nsnet = N
             if self.get_weight('Snet_orient'):
@@ -350,7 +354,8 @@ class GP_DOINet(GuidedProjectionBase):
             self.reinitialize = True
         if Norient != self._Norient:
             self.reinitialize = True 
-            
+        if Ncgc != self._Ncgc:
+            self.reinitialize = True
         if Nanet != self._Nanet:
             self.reinitialize = True
         if Nsnet != self._Nsnet:
@@ -381,7 +386,7 @@ class GP_DOINet(GuidedProjectionBase):
         self._N5 = N5
         self._Noscut = Noscut        
         self._Norient = Norient
-        
+        self._Ncgc = Ncgc
         self._Nanet = Nanet
         self._Nsnet,self._Ns_n,self._Ns_r = Nsnet,Ns_n,Ns_r
         
@@ -402,23 +407,29 @@ class GP_DOINet(GuidedProjectionBase):
             "X += [Nx,Ny,Nz]; len=3F"
             normals = self.mesh.face_normals()
             X = np.hstack((X, normals.flatten('F')))
-
+            
         if self.unit_edge_vec:
             _,l1,l2,l3,l4,E1,E2,E3,E4 = self.mesh.get_v4_unit_edge(self.is_diag_or_ctrl)
             X = np.r_[X,l1,l2,l3,l4]
             X = np.r_[X,E1.flatten('F'),E2.flatten('F'),E3.flatten('F'),E4.flatten('F')]
-            
+        
+        ### CGC: 
         if self.oscu_rrv_tangent:
             "X +=[ll1,ll2,ll3,ll4,lu1,lu2,u1,u2]"
-            l,t,lt1,lt2 = self.mesh.get_net_osculating_tangents(is_diagnet=self.is_diag_or_ctrl)
+            l,t,lt1,lt2 = self.mesh.get_net_osculating_tangents(self.is_diag_or_ctrl)
             [ll1,ll2,ll3,ll4],[lt1,t1],[lt2,t2] = l,lt1,lt2
             X = np.r_[X,ll1,ll2,ll3,ll4]
             X = np.r_[X,lt1,lt2,t1.flatten('F'),t2.flatten('F')] 
 
         if self.orient_rrv_normal:
-            _,vN,a = self.mesh.get_v4_orient_unit_normal()
+            _,vN,a = self.mesh.get_v4_orient_unit_normal(self.is_diag_or_ctrl)
             X = np.r_[X,vN.flatten('F'),a]     
-
+            
+        if self.get_weight('CGC'):
+            "X += [Cg1,Cg2, rho_g], Cg1 geodesic circle centers from isoline1, rho_g is 1/kappa_g"
+            Cg1, Cg2, rho1, rho2 = self.get_geodesic_curvature(self.is_diag_or_ctrl)
+            X = np.r_[X,Cg1.flatten('F'),Cg2.flatten('F'), rho1, rho2]  
+            
         ### CNC:
         if self.get_weight('Anet'):
             if self.get_weight('Anet'):
@@ -506,117 +517,7 @@ class GP_DOINet(GuidedProjectionBase):
             
         self.build_added_weight() # Hui add
 
-    #--------------------------------------------------------------------------
-    #                       Getting (initilization + Plotting):
-    #--------------------------------------------------------------------------
 
-    def get_snet(self,is_r,is_diagnet=False,is_orient=True):
-        """
-        each vertex has one [a,b,c,d,e] for sphere equation:
-            f=a(x^2+y^2+z^2)+(bx+cy+dz)+e=0
-            when a=0; plane equation
-            (x-x0)^2+(y-y0)^2+(z-z0)^2=R^2
-            M = (x0,y0,z0)=-(b,c,d)/2a
-            R^2 = (b^2+c^2+d^2-4ae)/4a^2
-            unit_sphere_normal==-(2*A*Vx+B, 2*A*Vy+C, 2*A*Vz+D), 
-            (note direction: from vertex to center)
-            
-        X += [V^2,A,B,C,D,E,a_sqrt]
-        if orient:
-            X += [n4,n4_sqrt], n4=-[2ax+b,2ay+c,2az+d]
-        if r:
-            X += [r]
-        if angle
-           X += [l1,l2,l3,l4,ue1,ue2,ue3,ue4]
-        """
-        V = self.mesh.vertices
-        if is_diagnet:
-            s0,s1,s2,s3,s4 = self.mesh.rr_star_corner
-        else:
-            s0,s1,s2,s3,s4 = self.mesh.rrv4f4
-        S0,S1,S2,S3,S4 = V[s0],V[s1],V[s2],V[s3],V[s4]
-        centers,radius,coeff,Nv4 = interpolate_sphere(S0,S1,S2,S3,S4)
-        VV = np.linalg.norm(np.vstack((S0,S1,S2,S3,S4)),axis=1)**2
-        A,B,C,D,E = coeff.reshape(5,-1)
-        A_sqrt = np.sqrt(A)
-        XA = np.r_[VV,A,B,C,D,E,A_sqrt]
-        if is_orient: ##always True
-            B,C,D,Nv4,n4_sqrt = self.mesh.orient(S0,A,B,C,D,Nv4)
-            XA = np.r_[VV,A,B,C,D,E,A_sqrt]  
-            XA = np.r_[XA, Nv4.flatten('F'),n4_sqrt]
-        if is_r:
-            r = np.mean(radius)
-            XA = np.r_[XA,r]
-        return XA, Nv4
-
-    def get_snet_data(self,is_diagnet=False, ##note: combine together suitable for diagonal
-                      center=False,normal=False,tangent=False,ss=False,
-                      is_diag_binormal=False):
-        "at star = self.rr_star"
-        V = self.mesh.vertices
-        if is_diagnet:
-            s0,s1,s2,s3,s4 = self.mesh.rr_star_corner
-        else:
-            s0,s1,s2,s3,s4 = self.mesh.rrv4f4
-            
-        S0,S1,S2,S3,S4 = V[s0],V[s1],V[s2],V[s3],V[s4]
-        centers,r,coeff,Nv4 = interpolate_sphere(S0,S1,S2,S3,S4)
-        if self.get_weight('Snet_orient'):
-            A,B,C,D,E = coeff.reshape(5,-1)
-            _,_,_,Nv4,_ = self.mesh.orient(S0,A,B,C,D,Nv4)
-            #Nv4 = self.mesh.get_v4_orient_unit_normal()[1][self.mesh.ind_rr_star_v4f4]
-            centers = S0+r[:,None]*Nv4
-        if center:
-            er0 = np.abs(np.linalg.norm(S0-centers,axis=1)-r)
-            er1 = np.abs(np.linalg.norm(S1-centers,axis=1)-r)
-            er2 = np.abs(np.linalg.norm(S2-centers,axis=1)-r)
-            er3 = np.abs(np.linalg.norm(S3-centers,axis=1)-r)
-            er4 = np.abs(np.linalg.norm(S4-centers,axis=1)-r)
-            #err = (er0+er1+er2+er3+er4) / 5
-            err = np.sqrt(er0**2+er1**2+er2**2+er3**2+er4**2)/r
-            print('radii:[min,mean,max]=','%.3f'%np.min(r),'%.3f'%np.mean(r),'%.3f'%np.max(r))
-            print('Err:[min,mean,max]=','%.3g'%np.min(err),'%.3g'%np.mean(err),'%.3g'%np.max(err))
-            return centers,err
-        elif normal:
-            # n = np.cross(C3-C1,C4-C2)
-            #n = S0-centers
-            n = Nv4
-            un = n / np.linalg.norm(n,axis=1)[:,None]
-            return S0,un
-        elif is_diag_binormal:
-            "only work for SSG/GSS/SSGG/GGSS-project, not for general Snet"
-            n = Nv4
-            un = n / np.linalg.norm(n,axis=1)[:,None]
-            if is_diagnet:
-                _,sa,sb,sc,sd = self.mesh.rrv4f4
-            else:
-                _,sa,sb,sc,sd = self.mesh.rr_star_corner
-            t1 = (V[sa]-V[sc])/np.linalg.norm(V[sa]-V[sc], axis=1)[:,None]
-            t2 = (V[sb]-V[sd])/np.linalg.norm(V[sb]-V[sd], axis=1)[:,None]
-            "note works for SSG..case, since un,sa-v,sc are coplanar"
-            bin1 = np.cross(un, t1)
-            bin2 = np.cross(un, t2)
-            bin1 = bin1 / np.linalg.norm(bin1, axis=1)[:,None]
-            bin2 = bin2 / np.linalg.norm(bin2, axis=1)[:,None]
-            return S0, bin1, bin2
-        elif tangent:
-            inn,_ = self.mesh.get_rr_vs_bounary()
-            V0,V1,V2,V3,V4 = S0[inn],S1[inn],S2[inn],S3[inn],S4[inn]
-            l1 = np.linalg.norm(V1-V0,axis=1)
-            l2 = np.linalg.norm(V2-V0,axis=1)
-            l3 = np.linalg.norm(V3-V0,axis=1)
-            l4 = np.linalg.norm(V4-V0,axis=1)
-            t1 = (V1-V0)*(l3**2)[:,None] - (V3-V0)*(l1**2)[:,None]
-            t1 = t1 / np.linalg.norm(t1,axis=1)[:,None]
-            t2 = (V2-V0)*(l4**2)[:,None] - (V4-V0)*(l2**2)[:,None]
-            t2 = t2 / np.linalg.norm(t2,axis=1)[:,None]
-            return V0,t1,t2
-        elif ss:
-            n = Nv4
-            un = n / np.linalg.norm(n,axis=1)[:,None]
-            return s0,un   
-        return S0,S1,S2,S3,S4,centers,r,coeff,Nv4
-  
     # -------------------------------------------------------------------------
     #                                 Build
     # -------------------------------------------------------------------------
@@ -726,6 +627,9 @@ class GP_DOINet(GuidedProjectionBase):
             #H,r = con_kite_diagnet(self.is_GO_or_OG,**self.weights)
             #self.add_iterative_constraint(H, r, 'Kite_diagnet')
             
+        if self.get_weight('CGC'):
+            H,r = con_CGC(self.is_diag_or_ctrl,**self.weights)
+            self.add_iterative_constraint(H, r, 'CGC')
             
         if self.get_weight('Anet'):
             H,r = con_anet(is_diagnet=self.is_diag_or_ctrl,**self.weights)
@@ -806,7 +710,7 @@ class GP_DOINet(GuidedProjectionBase):
         
         self.add_weight('Noscut', self._Noscut)
         self.add_weight('Norient', self._Norient)
-        
+        self.add_weight('Ncgc', self._Ncgc)
         self.add_weight('Nanet', self._Nanet)
         self.add_weight('Nsnet', self._Nsnet)
         self.add_weight('Ns_n', self._Ns_n)
@@ -838,8 +742,10 @@ class GP_DOINet(GuidedProjectionBase):
 
     def on_reinitilize(self): #copy from guidedprojection,need to check if it works 
         self.mesh.reinitialize_force_densities()
+
+    
     #--------------------------------------------------------------------------
-    #                                  Results
+    #                       Getting (initilization + Plotting):
     #--------------------------------------------------------------------------
 
     def vertices(self):
@@ -861,8 +767,6 @@ class GP_DOINet(GuidedProjectionBase):
         normals = np.reshape(normals, (F,3), order='F')
         return normals
 
-
-    #------------------------------------------------------------------------
     def get_osculating_tangents(self):
         if self.is_initial:
             X = self._X0
@@ -891,6 +795,172 @@ class GP_DOINet(GuidedProjectionBase):
             c_n = np.arange(3*num) + self._Norient-4*num 
             vN = self.X[c_n].reshape(-1,3,order='F')
             return [an,vN,0]
+        
+    def get_geodesic_curvature(self,is_diagnet=False):
+        """ curvature \kappa that projects on tangent plane and surface normal 
+        leads to geodesic curvature \kappa_g and normal curvature \kappa_n,
+        whose inversions are radii of corresponding circles: 
+            rho_g = 1/\kappa_g; rho_n = 1/\kappa_n
+        where the geodesic circle center Cg is on tangent plane.
+        
+        For v1-v-v3,there exists Cg1; for v2-v-v4, there exists Cg2;
+        CGC-net is defined by two families of isolines with constant |\kappa_g1=|\kappa_g2|,
+        that is unique rho_g = 1/\kappa_g for both isolines
+        
+        X +=[Cg1, Cg2, rho_g], len(Cg1)=len(Cg2)=3*num_rrv4f4, len(rho_g)=1
+        for isoline1 with v1-v-v3:
+            orientVN * (Cg1-V) = 0, (rho_g)^2=(Cg1-V)^2=(Cg1-V1)^2=(Cg1-V3)^2
+        for isoline2 with v2-v-v4:
+            orientVN * (Cg2-V) = 0, (rho_g)^2=(Cg2-V)^2=(Cg2-V2)^2=(Cg2-V4)^2
+        """
+        V = self.mesh.vertices
+        if is_diagnet:
+            v0,v1,v2,v3,v4 = self.mesh.rr_star_corner
+        else:
+            v0,v1,v2,v3,v4 = self.mesh.rrv4f4
+        
+        _,vN,_ = self.mesh.get_v4_orient_unit_normal(self.is_diag_or_ctrl)
+        
+        eps = np.finfo(float).eps
+        
+        def _get_center(v0,v1,v3, is_neg=False):
+            _,O1,r1 = circle_three_points(V[v1],V[v0],V[v3], center=True)
+
+            kd1 = (O1-V[v0]) / (r1[:,None]+eps) ##unit curvature vector
+            T1 = np.cross(vN,np.cross(kd1,vN+eps)) ##note: if geodesic, then O1-V[v0] // vN
+            T1 = T1 / (np.linalg.norm(T1,axis=1)[:,None]+eps)
+
+            ##check the orientation of geodesic-circle-centers
+            # id1 = np.where(np.einsum('ij,ij->i', kd1, T1) < 0)[0]
+            # if len(id1)!=0:
+            #     T1[id1] = -T1[id1]
+            #cos1 = np.abs(np.einsum('ij,ij->i', kd1, T1))
+            
+            cos1 = np.einsum('ij,ij->i', kd1, T1)
+            rho1 = r1 / (cos1+eps)
+            
+            if is_neg:
+                Cg1 = V[v0] - T1 * rho1[:,None]
+            else:
+                Cg1 = V[v0] + T1 * rho1[:,None]
+            return Cg1, rho1
+            
+        Cg1,rho1 = _get_center(v0, v1, v3)
+        Cg2,rho2 = _get_center(v0, v2, v4, True)
+        
+        #rho = np.mean(np.r_[rho1,rho2])
+        
+        return Cg1, Cg2, rho1,rho2
+        
+
+    def get_snet(self,is_r,is_diagnet=False,is_orient=True):
+        """
+        each vertex has one [a,b,c,d,e] for sphere equation:
+            f=a(x^2+y^2+z^2)+(bx+cy+dz)+e=0
+            when a=0; plane equation
+            (x-x0)^2+(y-y0)^2+(z-z0)^2=R^2
+            M = (x0,y0,z0)=-(b,c,d)/2a
+            R^2 = (b^2+c^2+d^2-4ae)/4a^2
+            unit_sphere_normal==-(2*A*Vx+B, 2*A*Vy+C, 2*A*Vz+D), 
+            (note direction: from vertex to center)
+            
+        X += [V^2,A,B,C,D,E,a_sqrt]
+        if orient:
+            X += [n4,n4_sqrt], n4=-[2ax+b,2ay+c,2az+d]
+        if r:
+            X += [r]
+        if angle
+           X += [l1,l2,l3,l4,ue1,ue2,ue3,ue4]
+        """
+        V = self.mesh.vertices
+        if is_diagnet:
+            s0,s1,s2,s3,s4 = self.mesh.rr_star_corner
+        else:
+            s0,s1,s2,s3,s4 = self.mesh.rrv4f4
+        S0,S1,S2,S3,S4 = V[s0],V[s1],V[s2],V[s3],V[s4]
+        centers,radius,coeff,Nv4 = interpolate_sphere(S0,S1,S2,S3,S4)
+        VV = np.linalg.norm(np.vstack((S0,S1,S2,S3,S4)),axis=1)**2
+        A,B,C,D,E = coeff.reshape(5,-1)
+        A_sqrt = np.sqrt(A)
+        XA = np.r_[VV,A,B,C,D,E,A_sqrt]
+        if is_orient: ##always True
+            B,C,D,Nv4,n4_sqrt = self.mesh.orient(S0,A,B,C,D,Nv4)
+            XA = np.r_[VV,A,B,C,D,E,A_sqrt]  
+            XA = np.r_[XA, Nv4.flatten('F'),n4_sqrt]
+        if is_r:
+            r = np.mean(radius)
+            XA = np.r_[XA,r]
+        return XA, Nv4
+
+    def get_snet_data(self,is_diagnet=False, ##note: combine together suitable for diagonal
+                      center=False,normal=False,tangent=False,ss=False,
+                      is_diag_binormal=False):
+        "at star = self.rr_star"
+        V = self.mesh.vertices
+        if is_diagnet:
+            s0,s1,s2,s3,s4 = self.mesh.rr_star_corner
+        else:
+            s0,s1,s2,s3,s4 = self.mesh.rrv4f4
+            
+        S0,S1,S2,S3,S4 = V[s0],V[s1],V[s2],V[s3],V[s4]
+        centers,r,coeff,Nv4 = interpolate_sphere(S0,S1,S2,S3,S4)
+        if self.get_weight('Snet_orient'):
+            A,B,C,D,E = coeff.reshape(5,-1)
+            _,_,_,Nv4,_ = self.mesh.orient(S0,A,B,C,D,Nv4)
+            #Nv4 = self.mesh.get_v4_orient_unit_normal()[1][self.mesh.ind_rr_star_v4f4]
+            centers = S0+r[:,None]*Nv4
+        if center:
+            er0 = np.abs(np.linalg.norm(S0-centers,axis=1)-r)
+            er1 = np.abs(np.linalg.norm(S1-centers,axis=1)-r)
+            er2 = np.abs(np.linalg.norm(S2-centers,axis=1)-r)
+            er3 = np.abs(np.linalg.norm(S3-centers,axis=1)-r)
+            er4 = np.abs(np.linalg.norm(S4-centers,axis=1)-r)
+            #err = (er0+er1+er2+er3+er4) / 5
+            err = np.sqrt(er0**2+er1**2+er2**2+er3**2+er4**2)/r
+            print('radii:[min,mean,max]=','%.3f'%np.min(r),'%.3f'%np.mean(r),'%.3f'%np.max(r))
+            print('Err:[min,mean,max]=','%.3g'%np.min(err),'%.3g'%np.mean(err),'%.3g'%np.max(err))
+            return centers,err
+        elif normal:
+            # n = np.cross(C3-C1,C4-C2)
+            #n = S0-centers
+            n = Nv4
+            un = n / np.linalg.norm(n,axis=1)[:,None]
+            return S0,un
+        elif is_diag_binormal:
+            "only work for SSG/GSS/SSGG/GGSS-project, not for general Snet"
+            n = Nv4
+            un = n / np.linalg.norm(n,axis=1)[:,None]
+            if is_diagnet:
+                _,sa,sb,sc,sd = self.mesh.rrv4f4
+            else:
+                _,sa,sb,sc,sd = self.mesh.rr_star_corner
+            t1 = (V[sa]-V[sc])/np.linalg.norm(V[sa]-V[sc], axis=1)[:,None]
+            t2 = (V[sb]-V[sd])/np.linalg.norm(V[sb]-V[sd], axis=1)[:,None]
+            "note works for SSG..case, since un,sa-v,sc are coplanar"
+            bin1 = np.cross(un, t1)
+            bin2 = np.cross(un, t2)
+            bin1 = bin1 / np.linalg.norm(bin1, axis=1)[:,None]
+            bin2 = bin2 / np.linalg.norm(bin2, axis=1)[:,None]
+            return S0, bin1, bin2
+        elif tangent:
+            inn,_ = self.mesh.get_rr_vs_bounary()
+            V0,V1,V2,V3,V4 = S0[inn],S1[inn],S2[inn],S3[inn],S4[inn]
+            l1 = np.linalg.norm(V1-V0,axis=1)
+            l2 = np.linalg.norm(V2-V0,axis=1)
+            l3 = np.linalg.norm(V3-V0,axis=1)
+            l4 = np.linalg.norm(V4-V0,axis=1)
+            t1 = (V1-V0)*(l3**2)[:,None] - (V3-V0)*(l1**2)[:,None]
+            t1 = t1 / np.linalg.norm(t1,axis=1)[:,None]
+            t2 = (V2-V0)*(l4**2)[:,None] - (V4-V0)*(l2**2)[:,None]
+            t2 = t2 / np.linalg.norm(t2,axis=1)[:,None]
+            return V0,t1,t2
+        elif ss:
+            n = Nv4
+            un = n / np.linalg.norm(n,axis=1)[:,None]
+            return s0,un   
+        return S0,S1,S2,S3,S4,centers,r,coeff,Nv4
+  
+    #------------------------------------------------------------------------
 
     def pseudogeodesic_binormal(self, is_initial=False, GO_Ps=False,
                                       is_orientT=False,is_orientN=False,

@@ -189,6 +189,8 @@ class DOINet(GeolabComponent):
     #--------------Plotting: -----------------------------
     show_oscu_tangent = Bool(label='oscuT')
     
+    show_cgc_centers = Bool(label='cgcCenters')
+    
     show_midpoint_edge1 = Bool(label='E1')
     show_midpoint_edge2 = Bool(label='E2')
     show_midpoint_polyline1 = Bool(label='Ply1')
@@ -248,10 +250,8 @@ class DOINet(GeolabComponent):
               #HGroup('orthogonal','GPC_net'),
               HGroup('DOI_net','is_DOI_SIR','is_DOI_SIR_diagKite'),
               HGroup('Kite_net','is_Kite_diagGPC','is_Kite_diagGPC_SIR'),
-              HGroup('CGC_net',
-                     'Gnet',
-                     ),
-              HGroup('CNC_net','Anet',),
+              HGroup('CGC_net','Gnet',
+                     'CNC_net','Anet',),
               # HGroup('Snet',
               #        #'Snet_orient',
               #        'Snet_constR',
@@ -287,8 +287,7 @@ class DOINet(GeolabComponent):
 
         label='Opt.Net',show_border=True),
         #------------------------------------------------  
-        VGroup(HGroup('show_oscu_tangent',
-                      'show_midpoint_edge1',
+        VGroup(HGroup('show_midpoint_edge1',
                       'show_midpoint_edge2',
                       'show_midpoint_polyline1',
                       'show_midpoint_polyline2',
@@ -298,11 +297,19 @@ class DOINet(GeolabComponent):
                      'show_diagonal_mesh',
                      'show_revolution',
                      ),
+              ##CGC
+              HGroup('show_oscu_tangent',
+                     'show_orient_vn',
+                     'show_cgc_centers',
+                     ),
+              
+              ##CNC
               HGroup('show_vs_sphere',
                      'show_snet_center',
                      'show_snet_tangent',
                      'show_snet_normal',),
               
+              ##Pnet
               HGroup('show_orient_vn',
                      'is_orient_tangent',
                      'is_orient_normal',
@@ -318,6 +325,8 @@ class DOINet(GeolabComponent):
                      'show_pseudogeo_2nd_rectifystrip',
                      'show_pseudogeo_2nd_rectifystrip_unroll',
                      ),
+              
+              ##unrollment
               HGroup('strip_width','is_central_strip'),
               HGroup('dist_inverval',
                      'set_unroll_strip_fairness',
@@ -1256,7 +1265,7 @@ class DOINet(GeolabComponent):
     #---------------------------------------------------------
 
     @on_trait_change('show_oscu_tangent')
-    def plot_orthoscu_tangent(self):
+    def plot_osculating_tangent(self):
         name = 'oscut'
         if self.show_oscu_tangent:  
             an,t1,t2 = self.optimizer.get_osculating_tangents()
@@ -1264,6 +1273,23 @@ class DOINet(GeolabComponent):
                                           color = 'r',name = name+'1') 
             self.meshmanager.plot_vectors(anchor=an,vectors=t2,position='tail',
                                           color = 'black',name = name+'2') 
+        else:
+            self.meshmanager.remove([name+'1',name+'2'])
+
+    @on_trait_change('show_cgc_centers')
+    def plot_cgc_centers(self):
+        name = 'cgc_c'
+        if self.show_cgc_centers:  
+            Cg1,Cg2,rho1,rho2 = self.optimizer.get_geodesic_curvature(self.switch_diag_or_ctrl)
+            print('geodesic radius:',np.max(rho1),np.max(rho2))
+            V = self.mesh.vertices[self.mesh.ver_rrv4f4]
+            
+            from archgeolab.archgeometry.curves import make_polyline_from_endpoints
+            pl1 = make_polyline_from_endpoints(V,Cg1)
+            pl2 = make_polyline_from_endpoints(V,Cg2)
+            
+            self.meshmanager.plot_polyline(pl1,color='r',name=name+'1')
+            self.meshmanager.plot_polyline(pl2,color='b',name=name+'2')
         else:
             self.meshmanager.remove([name+'1',name+'2'])
             
