@@ -174,16 +174,18 @@ class DOINet(GeolabComponent):
     Pseudogeodesic_net = Bool(label='Pnet')
 
     pseudogeo_allSameAngle = Bool(label='uniqAngle')
+    
+    switch_1st_or_2nd = Bool(False,label='_1st|2nd_')
+    is_both = Bool(label='is_both')#TODO
+    
     pseudogeo_1st = Bool(label='PS1st') ##1st-isoline being pseudo-geodesic
-    pseudogeo_2nd = Bool(label='PS2nd') ##2nd-isoline being pseudo-geodesic
+    #pseudogeo_2nd = Bool(label='PS2nd') ##2nd-isoline being pseudo-geodesic
     pseudogeo_orient = Bool(True,label='PSOrientON')
     pseudogeo_constwidth = Bool(label='constWidth')
     pseudogeo_uniquewidth = Bool(label='uniqWidth')##exchange with ps-constwidth
     #pseudogeo_rectify_dvlp = Bool(label='Develop')
     is_psangle1 = Bool(label='Const.Angle')
     pseudogeo_1st_constangle = Float(90)## const.angle of <normal,tangentplane>
-    is_psangle2 = Bool(False)
-    pseudogeo_2nd_constangle = Range(low=0, high=150.0, value=90) ##TODO remove
     
 
     #--------------Plotting: -----------------------------
@@ -209,14 +211,15 @@ class DOINet(GeolabComponent):
     show_snet_tangent = Bool(label='Snet-T')
     
     show_orient_vn = Bool(label='~vN')
-    show_pseudogeo_1st_crv = Bool(label='Crv1')
-    show_pseudogeo_2nd_crv = Bool(label='Crv2')
-    show_pseudogeo_1st_normal = Bool(label='BiN1')
-    show_pseudogeo_2nd_normal = Bool(label='BiN2')
-    show_pseudogeo_1st_rectifystrip = Bool(label='Strp3D1')
-    show_pseudogeo_2nd_rectifystrip = Bool(label='Strp3D2')
-    show_pseudogeo_1st_rectifystrip_unroll = Bool(label='Strp2D1')
-    show_pseudogeo_2nd_rectifystrip_unroll = Bool(label='Strp2D2')
+    
+    show_isoline = Bool(label='Crv')
+    
+    show_CGC_strip = Bool(label='CGCstrip')
+    show_CNC_strip = Bool(label='CNCstrip') #TODO
+    
+    show_pseudogeo_binormal = Bool(label='Pnet-BiN')
+    show_Pnet_rectifystrip = Bool(label='Pstrip')
+    show_isolinestrip_unroll = Bool(label='Unroll')
     
     strip_width = Float(0.5,label='Width')
     is_central_strip = Bool(True,label='_Central_')
@@ -311,20 +314,17 @@ class DOINet(GeolabComponent):
               ###-------------------------------------
               ##Pnet
               VGroup(
-                  HGroup('show_orient_vn',
-                         'is_orient_tangent',
+                  HGroup('switch_1st_or_2nd','is_both',
+                         'show_isoline',),
+                  HGroup('is_orient_tangent',
                          'is_orient_normal',
                          'is_remedied_BiN',
                          'is_smoothed_BiN'),
-                  HGroup('show_pseudogeo_1st_crv',
-                         'show_pseudogeo_1st_normal',
-                         'show_pseudogeo_1st_rectifystrip',
-                         'show_pseudogeo_1st_rectifystrip_unroll',
-                         ),
-                  HGroup('show_pseudogeo_2nd_crv',  
-                         'show_pseudogeo_2nd_normal',
-                         'show_pseudogeo_2nd_rectifystrip',
-                         'show_pseudogeo_2nd_rectifystrip_unroll',
+                  HGroup('show_orient_vn','show_pseudogeo_binormal',),
+                  HGroup('show_CGC_strip',
+                         'show_CNC_strip',
+                         'show_Pnet_rectifystrip',
+                         'show_isolinestrip_unroll',
                          ),
                     ##unrollment
                     HGroup('strip_width','is_central_strip'),
@@ -1091,33 +1091,74 @@ class DOINet(GeolabComponent):
         self.is_Kite_diagGPC = True
         self.is_Kite_diagGPC_SIR = True
 
-    @on_trait_change('button_align_CGC') #TODO
+    @on_trait_change('button_align_CGC')
     def set_align_CGC(self): 
         self.DOI_net = True
         self.is_DOI_SIR = True
         self.is_DOI_SIR_diagKite = True
+        ## diagonal Kite net of the SIR-net is a CGC-net
         self.CGC_net = True
+        self.switch_diag_or_ctrl = True
 
     @on_trait_change('button_align_CNC') #TODO
     def set_align_CNC(self): 
         self.DOI_net = True
         self.is_DOI_SIR = True
         self.is_DOI_SIR_diagKite = True
+        ## diagonal Kite net of the SIR-net is a CNC-net
         self.CNC_net = True
+        self.switch_diag_or_ctrl = True
 
     @on_trait_change('button_align_Pnet') #TODO
     def set_align_Pnet(self): 
         self.DOI_net = True
         self.is_DOI_SIR = True
         self.is_DOI_SIR_diagKite = True
+        ## diagonal Kite net of the SIR-net is a P-net
         self.Pseudogeodesic_net = True
-
-    # @on_trait_change('switch_GO_or_OG')
-    # def switch_GO_or_OG_net(self):
-    #     self.optimizer.is_GO_or_OG = self.switch_GO_or_OG           
+        self.switch_diag_or_ctrl = True
+          
     #---------------------------------------------------------        
     #                       Ploting
-    #---------------------------------------------------------         
+    #---------------------------------------------------------     
+
+    @on_trait_change('show_orient_vn')
+    def plot_gonet_pseudogeodesic_vertexNormal(self):
+        name = 'ps-geo-vn'
+        if self.show_orient_vn:
+            an,vn,_ = self.optimizer.get_orient_rr_normal()
+            self.meshmanager.plot_vectors(anchor=an,vectors=vn,position='tail',
+                                          color = 'g',name = name) 
+        else:
+            self.meshmanager.remove([name])    
+            
+    @on_trait_change('show_isoline')
+    def plot_1st_or_2nd_isoline(self):
+        name = 'ps-geo'
+        if self.show_isoline:
+            #work well, but without bdry-poly
+            pl1,pl2,_,_,_,_ = self.mesh.get_rregular_split_list_for_polysegmnet(is_diagnet=False,is_poly=True)
+            #pl1,pl2 = get_plot_ordered_isolines(self.mesh)
+            
+            if self.is_both:
+                self.meshmanager.plot_polyline(pl1,color=(240,114,114),
+                                               tube_radius=1.7*self.meshmanager.r,
+                                               name=name+'1')
+                self.meshmanager.plot_polyline(pl2,color=(98,113,180),
+                                               tube_radius=1.7*self.meshmanager.r,
+                                               name=name+'2')
+            else:
+                if self.switch_1st_or_2nd:
+                    pl, clr, name = pl1, (240,114,114), name+'1'
+                else:
+                    pl, clr, name = pl2, (98,113,180), name+'2'
+                
+                self.meshmanager.plot_polyline(pl,color=clr,
+                                               tube_radius=1.7*self.meshmanager.r,
+                                               name=name)
+        else:
+            self.meshmanager.remove([name+'1',name+'2'])
+            
     @on_trait_change('show_midpoint_edge1,show_midpoint_edge2')
     def plot_midpoint_edges(self):
         "same was as plot_isogonal_facebased_cross_vector; but different visulization"
@@ -1270,8 +1311,6 @@ class DOINet(GeolabComponent):
         name = 'cgc_c'
         if self.show_cgc_centers:  
             Cg1,Cg2,rho = self.optimizer.get_geodesic_curvature(self.switch_diag_or_ctrl)
-            #print('geodesic radius:',np.max(rho1),np.max(rho2))
-            print('rho=',rho)
             V = self.mesh.vertices[self.mesh.ver_rrv4f4]
             
             from archgeolab.archgeometry.curves import make_polyline_from_endpoints
@@ -1353,10 +1392,10 @@ class DOINet(GeolabComponent):
     #---------------------------------------------------------        
     #               Pnet - Ploting
     #---------------------------------------------------------
-    @on_trait_change('show_pseudogeo_1st_normal,show_pseudogeo_2nd_normal')
+    @on_trait_change('show_pseudogeo_binormal')
     def plot_1st_or_2nd_osculatingNormal(self):
         name = 'ps-geo-n'
-        if self.show_pseudogeo_1st_normal or self.show_pseudogeo_2nd_normal:
+        if self.show_pseudogeo_binormal:
             an,on1,on2,cos13,cos24 = self.optimizer.pseudogeodesic_binormal(
                                             is_orientT=self.is_orient_tangent,
                                             is_orientN=self.is_orient_normal,
@@ -1364,140 +1403,143 @@ class DOINet(GeolabComponent):
                                             is_smooth=self.is_smoothed_BiN)
             self.optimizer.data_pseudogeodesic_binormal = [an,on1,on2,cos13,cos24]
 
-            if self.show_pseudogeo_1st_normal:
-                self.meshmanager.plot_vectors(anchor=an,vectors=on1,position='tail',
-                                              color = 'r',name = name+'1') 
-            else:
-                self.meshmanager.remove(name+'1')
+            if self.is_both:
+                on, clr, name1 = on1, 'r', name+'1'
+                self.meshmanager.plot_vectors(anchor=an,vectors=on,position='tail',
+                                              color = clr,name = name1) 
                 
-            if self.show_pseudogeo_2nd_normal:
-                self.meshmanager.plot_vectors(anchor=an,vectors=on2,position='tail',
-                                                  color='b',name = name+'2') 
+                on, clr, name2 = on2, 'b', name+'2'
+                self.meshmanager.plot_vectors(anchor=an,vectors=on,position='tail',
+                                              color = clr,name = name2) 
             else:
-                self.meshmanager.remove(name+'2')
+                if self.switch_1st_or_2nd:
+                    on, clr, name = on1, 'r', name+'1'
+                else:
+                    on, clr, name = on2, 'b', name+'2'
+                
+                self.meshmanager.plot_vectors(anchor=an,vectors=on,position='tail',
+                                              color = clr,name = name) 
+                
         else:
-            self.meshmanager.remove([name+'1',name+'2'])  
-            self.meshmanager.remove([name+'11',name+'21']) 
-            self.meshmanager.remove([name+'12',name+'22'])                 
-
-    @on_trait_change('show_pseudogeo_1st_crv,show_pseudogeo_2nd_crv')
-    def plot_1st_or_2nd_isoline(self):
-        name = 'ps-geo'
-        if self.show_pseudogeo_1st_crv or self.show_pseudogeo_2nd_crv:
-            #work well, but without bdry-poly
-            pl1,pl2,_,_,_,_ = self.mesh.get_rregular_split_list_for_polysegmnet(is_diagnet=False,is_poly=True)
-            #pl1,pl2 = get_plot_ordered_isolines(self.mesh)
-            if self.show_pseudogeo_1st_crv:
-                self.meshmanager.plot_polyline(pl1,color=(240,114,114),
-                                               tube_radius=1.7*self.meshmanager.r,
-                                               name=name+'1')
-            else:
-                self.meshmanager.remove([name+'1'])
-            if self.show_pseudogeo_2nd_crv:
-                self.meshmanager.plot_polyline(pl2,color=(98,113,180),
-                                               tube_radius=1.7*self.meshmanager.r,
-                                               name=name+'2')
-            else:
-                self.meshmanager.remove([name+'2'])
-        else:
-            self.meshmanager.remove([name+'1',name+'2'])
-            #self.show_legend = False
-    
-    @on_trait_change('show_pseudogeo_1st_rectifystrip,show_pseudogeo_2nd_rectifystrip')
-    def plot_1st_or_2nd_rectifyingDevelopableSrf(self):
-        name = 'ps-R3D'
-        if self.show_pseudogeo_1st_rectifystrip or self.show_pseudogeo_2nd_rectifystrip:
+            self.meshmanager.remove([name+'1',name+'2'])   
+            
+    @on_trait_change('show_CGC_strip,show_CNC_strip,show_Pnet_rectifystrip')
+    def plot_1st_or_2nd_isoline_strip(self):
+        name = 'Isoline_strip'
+        if self.show_CGC_strip or self.show_CNC_strip or self.show_Pnet_rectifystrip:
             width = self.strip_width * self.mesh.mean_edge_length()
-
-            #if self.read_vertex_normal:
-                #biN =self.anvn[1]
-            #else:
-            biN = None
-            sm1,_,sm2,_ = self.optimizer.pseudogeodesic_rectifying_srf(
-                width,all_on=biN,centerline=self.is_central_strip)
             
-            if self.show_pseudogeo_1st_rectifystrip:
-                clr = 'orange'
-                data = sm1.face_planarity()
-                showf = Faces(sm1,face_data=data,
-                              lut_range=[0,np.max(data)],color='blue-red',#color=clr,
-                              name=name+'1f') 
-                showe = Edges(sm1,color=clr,name=name+'1e')
-                self.meshmanager.add([showf,showe])
-                self.save_new_mesh = sm1
-                self.label = name
-                print('planarity:[min,mean,max]=','%.2g' % np.min(data),'%.2g' % np.mean(data),'%.2g' % np.max(data))
-            else:
-                self.meshmanager.remove([name+'1e',name+'1f'])  
-            
-            if self.show_pseudogeo_2nd_rectifystrip:
-                clr = 'yellow'
-                data = sm2.face_planarity()
-                showf = Faces(sm2,face_data=data,
-                              lut_range=[0,np.max(data)],color='blue-red',#color=clr,
-                              name=name+'2f') 
-                showe = Edges(sm2,color=clr,name=name+'2e')
-                self.meshmanager.add([showf,showe])
-                self.save_new_mesh = sm2
-                self.label = name
-                print('planarity:[min,mean,max]=','%.2g' % np.min(data),'%.2g' % np.mean(data),'%.2g' % np.max(data))
-            else:
-                self.meshmanager.remove([name+'2e',name+'2f'])  
-        else: 
-            self.meshmanager.remove([name+'1e',name+'1f',name+'2e',name+'2f'])       
+            if self.show_CGC_strip:
+                sm1,_,sm2,_ = self.optimizer.get_CGC_circular_strip(width,self.is_central_strip)
+            elif self.show_CNC_strip:
+                pass #TODO
+            elif self.show_Pnet_rectifystrip:
+                #if self.read_vertex_normal:
+                    #biN =self.anvn[1]
+                #else:
+                biN = None
+                sm1,_,sm2,_ = self.optimizer.pseudogeodesic_rectifying_srf(
+                    width,all_on=biN,centerline=self.is_central_strip)
 
             
-    @on_trait_change('show_orient_vn')
-    def plot_gonet_pseudogeodesic_vertexNormal(self):
-        name = 'ps-geo-vn'
-        if self.show_orient_vn:
-            an,vn,_ = self.optimizer.get_orient_rr_normal()
-            self.meshmanager.plot_vectors(anchor=an,vectors=vn,position='tail',
-                                          color = 'g',name = name) 
+            if self.is_both:
+                sm, clr, name1 = sm1, 'orange', name+'1'
+                data = sm.face_planarity()
+                showf = Faces(sm,face_data=data,
+                              lut_range=[0,np.max(data)],color='blue-red',#color=clr,
+                              name=name1+'f') 
+                showe = Edges(sm,color=clr,name=name1+'e')
+                self.meshmanager.add([showf,showe])
+
+                sm, clr, name2 = sm2, 'yellow', name+'2'
+                data = sm.face_planarity()
+                showf = Faces(sm,face_data=data,
+                              lut_range=[0,np.max(data)],color='blue-red',#color=clr,
+                              name=name2+'f') 
+                showe = Edges(sm,color=clr,name=name2+'e')
+                self.meshmanager.add([showf,showe])
+                
+            else:
+                if self.switch_1st_or_2nd:
+                    sm, clr, name = sm1, 'orange', name+'1'
+                else:
+                    sm, clr, name = sm2, 'yellow', name+'2'
+                    
+                data = sm.face_planarity()
+                showf = Faces(sm,face_data=data,
+                              lut_range=[0,np.max(data)],color='blue-red',#color=clr,
+                              name=name+'f') 
+                showe = Edges(sm,color=clr,name=name+'e')
+                self.meshmanager.add([showf,showe])
+                
+                print('planarity:[min,mean,max]=','%.2g' % np.min(data),'%.2g' % np.mean(data),'%.2g' % np.max(data))
+                self.save_new_mesh, self.label = sm, name
         else:
-            self.meshmanager.remove([name])     
+            self.meshmanager.remove([name+'1e',name+'1f',name+'2e',name+'2f'])   
+            
 
-    @on_trait_change('show_pseudogeo_1st_rectifystrip_unroll,show_pseudogeo_2nd_rectifystrip_unroll')
+    @on_trait_change('show_isolinestrip_unroll')
     def plot_1st_or_2nd_rectifyingDevelopableSrf_unrolling(self):
         from huilab.huimesh.unroll import unroll_multiple_strips
         dist = self.mesh.mean_edge_length() * 0.5#self.scale_dist_offset
+        width = self.strip_width * dist
         name = 'ps-R2D'
-        if self.show_pseudogeo_1st_rectifystrip_unroll or self.show_pseudogeo_2nd_rectifystrip_unroll:
-            width = self.strip_width * self.mesh.mean_edge_length()
-            sm1,list1,sm2,list2 = self.optimizer.pseudogeodesic_rectifying_srf(
-                width,centerline=self.is_central_strip)
-            if self.show_pseudogeo_1st_rectifystrip_unroll:
-                um1 = unroll_multiple_strips(sm1,list1,dist,
-                                             step=self.dist_inverval,coo=2,
-                                             anchor=0,efair=self.set_unroll_strip_fairness,
-                                             itera=100,
-                                             is_midaxis=self.is_unroll_midaxis,
-                                             w_straight=self.set_unroll_strip_fairness)
-                clr = (240,114,114)#geo:red:(240,114,114);asy:blue:(98,113,180)
-                showf = Faces(um1,color=clr,name=name+'1f') 
-                showe = Edges(um1,color=clr,name=name+'1e')
-                self.meshmanager.add([showf,showe])
-                self.save_new_mesh = um1
-                self.label = name
+        if self.show_isolinestrip_unroll:
+
+            if self.show_CGC_strip:
+                sm1,list1,sm2,list2 = self.optimizer.get_CGC_circular_strip(width,self.is_central_strip)
+            elif self.show_CNC_strip:
+                pass #TODO
+            elif self.show_Pnet_rectifystrip:
+                sm1,list1,sm2,list2 = self.optimizer.pseudogeodesic_rectifying_srf(
+                    width,centerline=self.is_central_strip)
             else:
-                self.meshmanager.remove([name+'1e',name+'1f'])  
-            if self.show_pseudogeo_2nd_rectifystrip_unroll:
-                um2 = unroll_multiple_strips(sm2,list2,dist,
-                                             step=self.dist_inverval,coo=2,
-                                             anchor=0,efair=self.set_unroll_strip_fairness,
-                                             itera=100,
-                                             is_midaxis=self.is_unroll_midaxis,
-                                             w_straight=self.set_unroll_strip_fairness)
-                clr = (98,113,180)
-                showf = Faces(um2,color=clr,name=name+'2f') 
-                showe = Edges(um2,color=clr,name=name+'2e')
+                print('!!!--Need to choose CGCstrip, CNCstrip or Pstrip!!!')
+                sys.exit()            
+            
+
+            if self.is_both:
+                sm,lists, clr, name1 = sm1,list1, (240,114,114), name+'1'
+                um = unroll_multiple_strips(sm,lists,dist,
+                                            step=self.dist_inverval,coo=2,
+                                            anchor=0,efair=self.set_unroll_strip_fairness,
+                                            itera=100,
+                                            is_midaxis=self.is_unroll_midaxis,
+                                            w_straight=self.set_unroll_strip_fairness)
+                showf = Faces(um,color=clr,name=name1+'f') 
+                showe = Edges(um,color=clr,name=name1+'e')
                 self.meshmanager.add([showf,showe])
-                self.save_new_mesh = um2
-                self.label = name
+                
+                sm,lists, clr, name2 = sm2,list2, (98,113,180), name+'2'
+                um = unroll_multiple_strips(sm,lists,dist,
+                                            step=self.dist_inverval,coo=2,
+                                            anchor=0,efair=self.set_unroll_strip_fairness,
+                                            itera=100,
+                                            is_midaxis=self.is_unroll_midaxis,
+                                            w_straight=self.set_unroll_strip_fairness)
+                showf = Faces(um,color=clr,name=name2+'f') 
+                showe = Edges(um,color=clr,name=name2+'e')
+                self.meshmanager.add([showf,showe])
+
             else:
-                self.meshmanager.remove([name+'2e',name+'2f'])   
+                if self.switch_1st_or_2nd:#geo:red:(240,114,114);asy:blue:(98,113,180)
+                    sm,lists, clr, name = sm1,list1, (240,114,114), name+'1'
+                else:
+                    sm,lists, clr, name = sm2,list2, (98,113,180), name+'2'
+                    
+                um = unroll_multiple_strips(sm,lists,dist,
+                                            step=self.dist_inverval,coo=2,
+                                            anchor=0,efair=self.set_unroll_strip_fairness,
+                                            itera=100,
+                                            is_midaxis=self.is_unroll_midaxis,
+                                            w_straight=self.set_unroll_strip_fairness)
+                showf = Faces(um,color=clr,name=name+'f') 
+                showe = Edges(um,color=clr,name=name+'e')
+                self.meshmanager.add([showf,showe])
+                self.save_new_mesh, self.label = um, name
         else:
-            self.meshmanager.remove([name+'1e',name+'1f',name+'2e',name+'2f'])  
+            self.meshmanager.remove([name+'1e',name+'1f',name+'2e',name+'2f'])                 
+ 
     #--------------------------------------------------------------------------
     #                         Printing / Check
     #--------------------------------------------------------------------------         
@@ -1599,11 +1641,11 @@ class DOINet(GeolabComponent):
 
         self.optimizer.set_weight('Pnet', self.Pseudogeodesic_net)
         self.optimizer.set_weight('pseudogeo_1st',self.pseudogeo_1st)
-        self.optimizer.set_weight('pseudogeo_2nd',self.pseudogeo_2nd)
+        #self.optimizer.set_weight('pseudogeo_2nd',self.pseudogeo_2nd)
         self.optimizer.is_psangle1 = self.is_psangle1
-        self.optimizer.is_psangle2 = self.is_psangle2
+        #self.optimizer.is_psangle2 = self.is_psangle2
         self.optimizer.pseudogeo_1st_constangle = self.pseudogeo_1st_constangle
-        self.optimizer.pseudogeo_2nd_constangle = self.pseudogeo_2nd_constangle
+        #self.optimizer.pseudogeo_2nd_constangle = self.pseudogeo_2nd_constangle
         self.optimizer.is_pseudogeo_allSameAngle = self.pseudogeo_allSameAngle        
         self.optimizer.is_pseudogeo_orient = self.pseudogeo_orient
         

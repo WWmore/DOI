@@ -838,9 +838,50 @@ class GP_DOINet(GuidedProjectionBase):
         Cg1,rho1 = _get_center(v0, v1, v3)
         Cg2,rho2 = _get_center(v0, v2, v4)
         
+        print('rho1[min,max]=',np.min(rho1), np.max(rho1))
+        print('rho2[min,max]=',np.min(rho2), np.max(rho2))
+        
         rho = np.mean(np.r_[rho1,rho2])
         
         return Cg1, Cg2, rho #rho1,rho2 ##used for checking
+
+
+    def get_CGC_circular_strip(self,width,centerline=False,is_smooth=False):
+        v = self.mesh.ver_rrv4f4
+        an = self.mesh.vertices[v]
+        if self.is_initial: 
+            Cg1, Cg2, rho = self.get_geodesic_curvature(self.is_diag_or_ctrl)
+        else:
+            num = len(v)
+            c_cg1 = self._Ncgc - 6*num - 1 + np.arange(3*num)
+            c_cg2 = c_cg1 + 3*num
+            Cg1 = self.X[c_cg1].reshape(-1,3,order='F')
+            Cg2 = self.X[c_cg2].reshape(-1,3,order='F') 
+
+        T1, T2 = Cg1 - an, Cg2 - an
+        eps = np.finfo(float).eps 
+        T1 = T1 / (np.linalg.norm(T1,axis=1)[:,None]+eps)
+        T2 = T2 / (np.linalg.norm(T2,axis=1)[:,None]+eps)
+
+        T1 *= width*2
+        T2 *= width*2
+        ind1,ind2 = self.mesh.all_rr_polylines_v_vstar_order
+        arr1,arr2 = self.mesh.all_rr_polylines_vnum_arr
+        if centerline:
+            "strip's centerline pass through the polyline"
+            an1 = an - 0.5*T1
+            an2 = an - 0.5*T2
+        else:
+            "strip's bottomcrv pass through the polyline"
+            an1=an2 = an
+
+        sm1 = get_strip_from_rulings(an1[ind1],T1[ind1],arr1,is_smooth)
+        sm2 = get_strip_from_rulings(an2[ind2],T2[ind2],arr2,is_smooth)
+        return sm1,arr1,sm2,arr2
+
+    def get_CNC_circular_strip(self,width,centerline=False,is_smooth=False):#TODO
+        v = self.mesh.ver_rrv4f4
+        an = self.mesh.vertices[v]        
         
 
     def get_snet(self,is_r,is_diagnet=False,is_orient=True):

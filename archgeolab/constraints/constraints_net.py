@@ -635,15 +635,15 @@ def con_CGC(is_diagnet=False,is_rrvstar=True,**kwargs):
     
     H13,r13 = _con_rho(c_v0,c_v1,c_v3,c_cg1,c_rho)
     H24,r24 = _con_rho(c_v0,c_v2,c_v4,c_cg2,c_rho)
-    print('rho1:',np.sum(np.square(H13*X-r13)))
-    print('rho2:',np.sum(np.square(H24*X-r24)))
+    #print('rho1:',np.sum(np.square(H13*X-r13)))
+    #print('rho2:',np.sum(np.square(H24*X-r24)))
     
     Norient = kwargs.get('Norient')
     c_n = Norient-4*num + np.arange(3*num)
     Hg1,rg1 = con_planarity(X,c_v0,c_cg1,c_n) ##center Cg1 lies in tangent pln.
     Hg2,rg2 = con_planarity(X,c_v0,c_cg2,c_n) ##center Cg1 lies in tangent pln.
-    print('g1:',np.sum(np.square(Hg1*X-rg1)))
-    print('g2:',np.sum(np.square(Hg2*X-rg2)))
+    #print('g1:',np.sum(np.square(Hg1*X-rg1)))
+    #print('g2:',np.sum(np.square(Hg2*X-rg2)))
     
     H = sparse.vstack((H13, H24, Hg1, Hg2))
     r = np.r_[r13, r24, rg1, rg2] 
