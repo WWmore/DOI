@@ -14,16 +14,23 @@ from archgeolab.constraints.constraints_basic import column3D,con_edge,\
     con_unit,con_constl,con_equal_length,con_symmetry,\
     con_planarity,con_unit_normal,con_diagonal,con_osculating_tangent,\
     con_equal_opposite_angle,con_dependent_vector,con_cross,\
-    con_constangle2,con_constangle3,con_constangle4,con_positive,con_negative,\
+    con_constangle2,con_constangle3,con_positive,con_negative,\
     con_orient,con_orient1,con_orient2,con_ortho,con_orthogonal_2vectors,\
     con_diagonal2,con_circle
 # -------------------------------------------------------------------------
 """
 from archgeolab.constraints.constraints_net import 
-    con_unit_edge,con_orient_rr_vn,con_orthogonal_midline,\
-    con_anet,con_anet_diagnet,con_snet,con_gnet,
-    con_doi
-        
+    con_unit_edge,
+    con_osculating_tangents
+    con_orient_rr_vn,
+    con_orthogonal_midline,
+    con_DOI, con_DOI__freeform, con_GOnet, con_DGPC
+    con_CGC, con_Gnet
+    con_Anet,
+    con_Snet,con_Gnet,
+    con_Kite,con_Kite_diagnet
+    con_Pnet, con_pseudogeodesic_pattern
+    con_polyline_ruling
 """
 
     #--------------------------------------------------------------------------
@@ -35,12 +42,11 @@ def con_unit_edge(is_diagnet=False,is_rrvstar=True,**kwargs):
     X += [l1,l2,l3,l4,ue1,ue2,ue3,ue4]; exists multiples between ue1,ue2,ue3,ue4
     (vi-v) = li*ui, ui**2=1, (i=1,2,3,4)
     """
-    diag = True if is_diagnet else False
     mesh = kwargs.get('mesh')
     X = kwargs.get('X')
     N5 = kwargs.get('N5')
     V = mesh.V
-    if diag:
+    if is_diagnet:
         v,v1,v2,v3,v4 = mesh.rr_star_corner 
     elif is_rrvstar:
         v,v1,v2,v3,v4 = mesh.rrv4f4
@@ -183,7 +189,7 @@ def con_orthogonal_midline(is_rr=True,**kwargs):
     #--------------------------------------------------------------------------
     #           Geodesic parallel coordinates, SIR,  Kite:
     #--------------------------------------------------------------------------  
-def con_doi(is_GO_or_OG=True,is_SIR=False,is_diagKite=False,**kwargs):
+def con_DOI(is_GO_or_OG=True,is_SIR=False,is_diagKite=False,**kwargs):
     """DOI-net: Discrete Orthogonal Isoceles Net 
                 parametrizes Geodesic Paralel Coordinates
     
@@ -289,7 +295,7 @@ def con_doi(is_GO_or_OG=True,is_SIR=False,is_diagKite=False,**kwargs):
     r = np.r_[r1, r2]  
     return H*w,r*w
 
-def con_doi__freeform(is_GO_or_OG=True,is_SIR=False,is_diagKite=False,**kwargs):
+def con_DOI__freeform(is_GO_or_OG=True,is_SIR=False,is_diagKite=False,**kwargs):
     """ above fucntion con_doi defined based on vMatrix from patch or rotational mesh
     can not handle the case with unregular boundaries
     this function should work on quad mesh with even singularieis (need check)
@@ -370,8 +376,84 @@ def con_doi__freeform(is_GO_or_OG=True,is_SIR=False,is_diagKite=False,**kwargs):
         H = sparse.vstack((H, H1, H2))
         r = np.r_[r, r1, r2]   
     return H*w,r*w
+
+def con_GOnet(is_rrvstar=False,is_direction24=False,**kwargs):
+    """ paper: <Discrete GEODESIC PARALLEL COORDINATES>-SIGGRAPH ASIA 2019
+    based on con_unit_edge() & con_1geodesic
+    orthogonal: (e1-e3)*(e2-e4) = 0
+    tangents := e1-e3, e2-e4
+    normal := t1 x t2
+    if direction: 
+        geodesic: e1*e2-e1*e4=0;  e2*e3-e3*e4=0; 
+    else:
+        geodesic: e1*e2-e2*e3=0;  e3*e4-e4*e1=0;
+    """
+    w = kwargs.get('GOnet')
+    mesh = kwargs.get('mesh')
+    X = kwargs.get('X')
+    N = kwargs.get('N')
+    N5 = kwargs.get('N5')
     
-def con_kite(is_transpose=False,is_diagGPC=False,is_diagSIR=False,is_rr=False,**kwargs):
+    if is_rrvstar:
+        num=mesh.num_rrv4f4
+    else:
+        num = mesh.num_regular
+        
+    arr = np.arange(num)
+    c_ue1 = column3D(arr,N5-12*num,num)
+    c_ue2 = column3D(arr,N5-9*num,num)
+    c_ue3 = column3D(arr,N5-6*num,num)
+    c_ue4 = column3D(arr,N5-3*num,num) 
+  
+    if is_direction24:
+        H1,r1 = con_equal_opposite_angle(X,c_ue1,c_ue2,c_ue2,c_ue3)
+        H2,r2 = con_equal_opposite_angle(X,c_ue3,c_ue4,c_ue4,c_ue1)
+    else:
+        H1,r1 = con_equal_opposite_angle(X,c_ue1,c_ue2,c_ue1,c_ue4)
+        H2,r2 = con_equal_opposite_angle(X,c_ue2,c_ue3,c_ue3,c_ue4)
+    
+    H = sparse.vstack((H1, H2))
+    r = np.r_[r1, r2]
+    
+    if 0:
+        "additional orthogonal: (e1-e3)*(e2-e4) = 0"          
+        row = np.tile(arr,12)
+        col = np.r_[c_ue1,c_ue2,c_ue3,c_ue4]
+        data = np.r_[X[c_ue2]-X[c_ue4],X[c_ue1]-X[c_ue3],X[c_ue4]-X[c_ue2],X[c_ue3]-X[c_ue1]]
+        H3 = sparse.coo_matrix((data,(row,col)), shape=(num, N))
+        r3 = np.einsum('ij,ij->i',(X[c_ue1]-X[c_ue3]).reshape(-1,3, order='F'),(X[c_ue2]-X[c_ue4]).reshape(-1,3, order='F'))
+        #print(H1.shape,H2.shape,H3.shape,r1.shape,r2.shape,r3.shape)
+        H = sparse.vstack((H1, H2, H3))
+        r = np.r_[r1, r2, r3]  
+        
+    #print('gonet:',np.sum(np.square(H*X-r)))
+    return H*w,r*w
+
+def con_DGPC(is_rrvstar=False,polyline_direction=False,**kwargs):
+    """main difference here is using patch_matrix to represent all vertices
+    based on con_unit_edge() & con_gonet
+    equal-geodesic-segment lengths along parallel-direction
+    each row: (vi-vj)^2 - lij^2 = 0
+    """    
+    w = kwargs.get('DGPC')
+    mesh = kwargs.get('mesh')
+    X = kwargs.get('X')
+    
+    Ndgpc = kwargs.get('Ndgpc')
+    
+    rm = mesh.patch_matrix
+    if polyline_direction:
+        rm = rm.T
+    nrow,ncol = rm.shape    
+    vi,vj = rm[:,:-1].flatten(), rm[:,1:].flatten()
+    c_vi = column3D(vi ,0,mesh.V)
+    c_vj = column3D(vj ,0,mesh.V)
+    c_l = (Ndgpc-nrow+np.arange(nrow)).repeat(ncol-1)
+    H,r = con_diagonal(X,c_vi,c_vj,c_l,nrow*(ncol-1))
+    return H*w,r*w
+
+    
+def con_Kite(is_transpose=False,is_diagGPC=False,is_diagSIR=False,is_rr=False,**kwargs):
     """Kite-net: two pairs of equal edge lengths within quad and on vertex-star
 
     is_diagGPC: 
@@ -456,7 +538,7 @@ def con_kite(is_transpose=False,is_diagGPC=False,is_diagSIR=False,is_rr=False,**
         
     return H*w,r*w
 
-def con_kite_diagnet(is_transpose=False,**kwargs):
+def con_Kite_diagnet(is_transpose=False,**kwargs):
     """
     Kite-diagnet: based on each vertex star, two pairs of equal diagonal lengths
 
@@ -507,94 +589,10 @@ def con_kite_diagnet(is_transpose=False,**kwargs):
     
     return H*w,r*w
 
-    
-
-    
-    
-
-    
-
-
-def con_gonet(is_rrvstar=False,is_direction24=False,**kwargs):
-    """ paper: <Discrete GEODESIC PARALLEL COORDINATES>-SIGGRAPH ASIA 2019
-    based on con_unit_edge() & con_1geodesic
-    orthogonal: (e1-e3)*(e2-e4) = 0
-    tangents := e1-e3, e2-e4
-    normal := t1 x t2
-    if direction: 
-        geodesic: e1*e2-e1*e4=0;  e2*e3-e3*e4=0; 
-    else:
-        geodesic: e1*e2-e2*e3=0;  e3*e4-e4*e1=0;
-    """
-    w = kwargs.get('GOnet')
-    mesh = kwargs.get('mesh')
-    X = kwargs.get('X')
-    N = kwargs.get('N')
-    N5 = kwargs.get('N5')
-    
-    if is_rrvstar:
-        num=mesh.num_rrv4f4
-    else:
-        num = mesh.num_regular
-        
-    arr = np.arange(num)
-    c_ue1 = column3D(arr,N5-12*num,num)
-    c_ue2 = column3D(arr,N5-9*num,num)
-    c_ue3 = column3D(arr,N5-6*num,num)
-    c_ue4 = column3D(arr,N5-3*num,num) 
-  
-    if is_direction24:
-        H1,r1 = con_equal_opposite_angle(X,c_ue1,c_ue2,c_ue2,c_ue3)
-        H2,r2 = con_equal_opposite_angle(X,c_ue3,c_ue4,c_ue4,c_ue1)
-    else:
-        H1,r1 = con_equal_opposite_angle(X,c_ue1,c_ue2,c_ue1,c_ue4)
-        H2,r2 = con_equal_opposite_angle(X,c_ue2,c_ue3,c_ue3,c_ue4)
-    
-    H = sparse.vstack((H1, H2))
-    r = np.r_[r1, r2]
-    
-    if 0:
-        "additional orthogonal: (e1-e3)*(e2-e4) = 0"          
-        row = np.tile(arr,12)
-        col = np.r_[c_ue1,c_ue2,c_ue3,c_ue4]
-        data = np.r_[X[c_ue2]-X[c_ue4],X[c_ue1]-X[c_ue3],X[c_ue4]-X[c_ue2],X[c_ue3]-X[c_ue1]]
-        H3 = sparse.coo_matrix((data,(row,col)), shape=(num, N))
-        r3 = np.einsum('ij,ij->i',(X[c_ue1]-X[c_ue3]).reshape(-1,3, order='F'),(X[c_ue2]-X[c_ue4]).reshape(-1,3, order='F'))
-        #print(H1.shape,H2.shape,H3.shape,r1.shape,r2.shape,r3.shape)
-        H = sparse.vstack((H1, H2, H3))
-        r = np.r_[r1, r2, r3]  
-        
-    #print('gonet:',np.sum(np.square(H*X-r)))
-    return H*w,r*w
-
-def con_dgpc(is_rrvstar=False,polyline_direction=False,**kwargs):
-    """main difference here is using patch_matrix to represent all vertices
-    based on con_unit_edge() & con_gonet
-    equal-geodesic-segment lengths along parallel-direction
-    each row: (vi-vj)^2 - lij^2 = 0
-    """    
-    w = kwargs.get('DGPC')
-    mesh = kwargs.get('mesh')
-    X = kwargs.get('X')
-    
-    Ndgpc = kwargs.get('Ndgpc')
-    
-    rm = mesh.patch_matrix
-    if polyline_direction:
-        rm = rm.T
-    nrow,ncol = rm.shape    
-    vi,vj = rm[:,:-1].flatten(), rm[:,1:].flatten()
-    c_vi = column3D(vi ,0,mesh.V)
-    c_vj = column3D(vj ,0,mesh.V)
-    c_l = (Ndgpc-nrow+np.arange(nrow)).repeat(ncol-1)
-    H,r = con_diagonal(X,c_vi,c_vj,c_l,nrow*(ncol-1))
-    return H*w,r*w
-
-
     #--------------------------------------------------------------------------
     #                      CGC / G-net:
     #--------------------------------------------------------------------------  
-def con_CGC(is_diagnet=False,is_rrvstar=False,**kwargs):
+def con_CGC(is_diagnet=False,is_rrvstar=True,**kwargs):
     """CGC_net: net curves of constant geodesic curvature, kg1=|kg2|=const.
         X +=[Cg1, Cg2, rho_g], len(Cg1)=len(Cg2)=3*num_rrv4f4, len(rho_g)=1
         for isoline v1-v-v3:
@@ -623,23 +621,20 @@ def con_CGC(is_diagnet=False,is_rrvstar=False,**kwargs):
     c_v3 = column3D(v3,0,V)
     c_v4 = column3D(v4,0,V)
 
-    c_cg1 = Ncgc - 6*num - 2*num + np.arange(3*num) ##Huicheck: change 1 to 2*num
+    c_cg1 = Ncgc - 6*num - 1 + np.arange(3*num) ##Huicheck: change 1 to 2*num
     c_cg2 = c_cg1 + 3*num
-    #c_rho = np.tile(Ncgc - 1, num)
-    c_rho1 =  Ncgc - 2*num + np.arange(num)
-    c_rho2 = c_rho1 + num
+    c_rho = np.tile(Ncgc - 1, num)
+    #c_rho1 =  Ncgc - 2*num + np.arange(num)
+    #c_rho2 = c_rho1 + num
     
-    def _con_rho(c_v0,c_v1,c_v3,c_g1,c_rho):
+    def _con_rho(c_v0,c_v1,c_v3,c_cg1,c_rho):
         H0,r0 = con_circle(X,c_v0,c_cg1,c_rho)
         H1,r1 = con_circle(X,c_v1,c_cg1,c_rho)
         H3,r3 = con_circle(X,c_v3,c_cg1,c_rho)
-        # print('0:',np.sum(np.square(H0*X-r0)))
-        # print('1:',np.sum(np.square(H1*X-r1)))
-        # print('3:',np.sum(np.square(H3*X-r3)))
         return sparse.vstack((H0, H1, H3)), np.r_[r0, r1, r3] 
     
-    H13,r13 = _con_rho(c_v0,c_v1,c_v3,c_cg1,c_rho1)
-    H24,r24 = _con_rho(c_v0,c_v2,c_v4,c_cg2,c_rho2)
+    H13,r13 = _con_rho(c_v0,c_v1,c_v3,c_cg1,c_rho)
+    H24,r24 = _con_rho(c_v0,c_v2,c_v4,c_cg2,c_rho)
     print('rho1:',np.sum(np.square(H13*X-r13)))
     print('rho2:',np.sum(np.square(H24*X-r24)))
     
@@ -655,7 +650,7 @@ def con_CGC(is_diagnet=False,is_rrvstar=False,**kwargs):
     return H*w,r*w
 
 
-def con_gnet(is_rrvstar=True,**kwargs):
+def con_Gnet(is_rrvstar=True,**kwargs):
     """
     Gnet: based on con_unit_edge(diag=False)
     Gnet_diagnet: based on con_unit_edge(diag=True)
@@ -695,7 +690,7 @@ def con_CNC(is_rr=False,**kwargs):
         = S-net + constant radius 
     refer to : con_snet(is_uniqR=True)
     """
-def con_snet(orientrn,is_rrvstar=True,is_diagnet=False,
+def con_Snet(orientrn,is_rrvstar=True,is_diagnet=False,
              is_uniqR=False,assigned_r=None,**kwargs):
     """a(x^2+y^2+z^2)+(bx+cy+dz)+e=0 ; normalize: F^2 = b^2+c^2+d^2-4ae=1
     sphere center C:= (m1,m2,m3) = -(b, c, d) /a/2
@@ -890,7 +885,7 @@ def con_snet(orientrn,is_rrvstar=True,is_diagnet=False,
     return H*w,r*w
 
 
-def con_anet(is_rrvstar=False,is_diagnet=False,**kwargs):
+def con_Anet(is_rrvstar=False,is_diagnet=False,**kwargs):
     """ based on con_unit_edge()
     X += [ni]
     ni * (vij - vi) = 0

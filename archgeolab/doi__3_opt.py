@@ -20,9 +20,9 @@ from archgeolab.constraints.constraints_basic import con_planarity_constraints
 from archgeolab.constraints.constraints_fairness import con_fairness_4th_different_polylines
 
 from archgeolab.constraints.constraints_net import con_unit_edge,con_orient_rr_vn,\
-    con_osculating_tangents,con_gnet,con_CGC,\
-    con_orthogonal_midline,con_anet,con_snet,con_doi,con_doi__freeform,\
-    con_kite,con_pseudogeodesic_pattern
+    con_osculating_tangents,con_Gnet,con_CGC,\
+    con_orthogonal_midline,con_Anet,con_Snet,con_DOI,con_DOI__freeform,\
+    con_Kite,con_pseudogeodesic_pattern
     
 from archgeolab.constraints.constraints_glide import con_glide_in_plane,\
     con_alignment,con_alignments,con_selected_vertices_glide_in_one_plane,\
@@ -253,7 +253,7 @@ class GP_DOINet(GuidedProjectionBase):
 
         if self.get_weight('CGC'):
             "X += [Cg1,Cg2, rho_g]"
-            N += 6*num_rrstar + 2*num_rrstar
+            N += 6*num_rrstar + 1 #2*num_rrstar
             Ncgc = N
 
         if self.get_weight('Anet'):
@@ -427,8 +427,8 @@ class GP_DOINet(GuidedProjectionBase):
             
         if self.get_weight('CGC'):
             "X += [Cg1,Cg2, rho_g], Cg1 geodesic circle centers from isoline1, rho_g is 1/kappa_g"
-            Cg1, Cg2, rho1, rho2 = self.get_geodesic_curvature(self.is_diag_or_ctrl)
-            X = np.r_[X,Cg1.flatten('F'),Cg2.flatten('F'), rho1, rho2]  
+            Cg1, Cg2, rho = self.get_geodesic_curvature(self.is_diag_or_ctrl)
+            X = np.r_[X,Cg1.flatten('F'),Cg2.flatten('F'), rho]  
             
         ### CNC:
         if self.get_weight('Anet'):
@@ -593,7 +593,7 @@ class GP_DOINet(GuidedProjectionBase):
             self.add_iterative_constraint(H, r, 'unit_edge')
 
         if self.get_weight('Gnet'):
-            H,r = con_gnet(**self.weights)
+            H,r = con_Gnet(**self.weights)
             self.add_iterative_constraint(H, r, 'Gnet')   
             
         if self.oscu_rrv_tangent:
@@ -613,15 +613,15 @@ class GP_DOINet(GuidedProjectionBase):
         if self.get_weight('DOI'):
             yes1, yes2 = self.is_DOI_SIR, self.is_DOI_SIR_diagKite
             if True:
-                H,r = con_doi__freeform(self.is_GO_or_OG,yes1,yes2,**self.weights)
+                H,r = con_DOI__freeform(self.is_GO_or_OG,yes1,yes2,**self.weights)
             else:
                 "works well, but only for patch or rotational mesh"
-                H,r = con_doi(self.is_GO_or_OG,yes1,**self.weights)
+                H,r = con_DOI(self.is_GO_or_OG,yes1,**self.weights)
             self.add_iterative_constraint(H, r, 'DOI')
             
         if self.get_weight('Kite'):
             yes1,yes2 = self.is_Kite_diagGPC, self.is_Kite_diagGPC_SIR
-            H,r = con_kite(self.is_GO_or_OG,yes1,yes2,**self.weights)
+            H,r = con_Kite(self.is_GO_or_OG,yes1,yes2,**self.weights)
             self.add_iterative_constraint(H, r, 'Kite')
         #elif self.get_weight('Kite_diagnet'): #Hui: works but not use in alignnet on SIR-net
             #H,r = con_kite_diagnet(self.is_GO_or_OG,**self.weights)
@@ -632,12 +632,12 @@ class GP_DOINet(GuidedProjectionBase):
             self.add_iterative_constraint(H, r, 'CGC')
             
         if self.get_weight('Anet'):
-            H,r = con_anet(is_diagnet=self.is_diag_or_ctrl,**self.weights)
+            H,r = con_Anet(is_diagnet=self.is_diag_or_ctrl,**self.weights)
             self.add_iterative_constraint(H, r, 'Anet')
 
         if self.get_weight('Snet'):
             orientrn = self.mesh.new_vertex_normals()
-            H,r = con_snet(orientrn,
+            H,r = con_Snet(orientrn,
                            is_diagnet=self.is_diag_or_ctrl,
                            is_uniqR=self.if_uniqradius,
                            assigned_r=self.assigned_snet_radius,
@@ -823,34 +823,24 @@ class GP_DOINet(GuidedProjectionBase):
         
         eps = np.finfo(float).eps
         
-        def _get_center(v0,v1,v3, is_neg=False):
+        def _get_center(v0,v1,v3):
             _,O1,r1 = circle_three_points(V[v1],V[v0],V[v3], center=True)
 
             kd1 = (O1-V[v0]) / (r1[:,None]+eps) ##unit curvature vector
             T1 = np.cross(vN,np.cross(kd1,vN+eps)) ##note: if geodesic, then O1-V[v0] // vN
             T1 = T1 / (np.linalg.norm(T1,axis=1)[:,None]+eps)
 
-            ##check the orientation of geodesic-circle-centers
-            # id1 = np.where(np.einsum('ij,ij->i', kd1, T1) < 0)[0]
-            # if len(id1)!=0:
-            #     T1[id1] = -T1[id1]
-            #cos1 = np.abs(np.einsum('ij,ij->i', kd1, T1))
-            
             cos1 = np.einsum('ij,ij->i', kd1, T1)
-            rho1 = r1 / (cos1+eps)
-            
-            if is_neg:
-                Cg1 = V[v0] - T1 * rho1[:,None]
-            else:
-                Cg1 = V[v0] + T1 * rho1[:,None]
+            rho1 = r1 / (cos1+eps) 
+            Cg1 = V[v0] + T1 * rho1[:,None]
             return Cg1, rho1
             
         Cg1,rho1 = _get_center(v0, v1, v3)
-        Cg2,rho2 = _get_center(v0, v2, v4, True)
+        Cg2,rho2 = _get_center(v0, v2, v4)
         
-        #rho = np.mean(np.r_[rho1,rho2])
+        rho = np.mean(np.r_[rho1,rho2])
         
-        return Cg1, Cg2, rho1,rho2
+        return Cg1, Cg2, rho #rho1,rho2 ##used for checking
         
 
     def get_snet(self,is_r,is_diagnet=False,is_orient=True):

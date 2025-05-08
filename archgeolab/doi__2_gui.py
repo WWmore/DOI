@@ -147,11 +147,11 @@ class DOINet(GeolabComponent):
     is_Kite_diagGPC = Bool(label='is_Kite-GPC')
     is_Kite_diagGPC_SIR = Bool(label='is_Kite-GPC-SIR')
 
-    button_align_diagKite = Button(label='AlignDiagKite')
-    button_align_ctrlKite = Button(label='AlignCtrlKite')
-    button_align_CGC = Button(label='AlignCGC')
-    button_align_CNC = Button(label='AlignCNC')
-    button_align_Pnet = Button(label='AlignPnet')
+    button_align_diagKite = Button(label='A-DiagKite')
+    button_align_ctrlKite = Button(label='A-Kite')
+    button_align_CGC = Button(label='A-CGC')
+    button_align_CNC = Button(label='A-CNC')
+    button_align_Pnet = Button(label='A-Pnet')
     
     CGC_net = Bool(label='CGC')
     Gnet = Bool(label='Gnet') 
@@ -180,10 +180,10 @@ class DOINet(GeolabComponent):
     pseudogeo_constwidth = Bool(label='constWidth')
     pseudogeo_uniquewidth = Bool(label='uniqWidth')##exchange with ps-constwidth
     #pseudogeo_rectify_dvlp = Bool(label='Develop')
-    is_psangle1 = Bool(False)
-    pseudogeo_1st_constangle = Range(low=0, high=150.0, value=90)## const.angle of <normal,tangentplane>
+    is_psangle1 = Bool(label='Const.Angle')
+    pseudogeo_1st_constangle = Float(90)## const.angle of <normal,tangentplane>
     is_psangle2 = Bool(False)
-    pseudogeo_2nd_constangle = Range(low=0, high=150.0, value=90) 
+    pseudogeo_2nd_constangle = Range(low=0, high=150.0, value=90) ##TODO remove
     
 
     #--------------Plotting: -----------------------------
@@ -258,26 +258,23 @@ class DOINet(GeolabComponent):
               #        Item('if_uniqR',show_label=False),
               #        'Snet_constR_assigned'),
 
-              HGroup('Pseudogeodesic_net','pseudogeo_orient'),
+              HGroup('Pseudogeodesic_net','pseudogeo_orient',
               # HGroup('pseudogeo_1st',
               #        'pseudogeo_2nd',),
-              HGroup('pseudogeo_allSameAngle',
+                     'pseudogeo_allSameAngle',
                      'pseudogeo_uniquewidth',
                      'pseudogeo_constwidth',
                      ),
-              HGroup(Item('is_psangle1',
-                        tooltip='1st-Pseudogeodesic',
-                     show_label=False),
+              HGroup('is_psangle1',
                      Item('pseudogeo_1st_constangle',show_label=False)),
-              HGroup(Item('is_psangle2',
-                        tooltip='2nd-Pseudogeodesic',
-                     show_label=False),
-                     Item('pseudogeo_2nd_constangle',show_label=False)),
+              # HGroup(Item('is_psangle2',
+              #           tooltip='2nd-Pseudogeodesic',
+              #        show_label=False),
+              #        Item('pseudogeo_2nd_constangle',show_label=False)),
                      
               HGroup(Item('button_align_diagKite',show_label=False),
                      Item('button_align_ctrlKite',show_label=False),
-                     ),
-              HGroup(Item('button_align_CGC',show_label=False),
+                     Item('button_align_CGC',show_label=False),
                      Item('button_align_CNC',show_label=False),
                      Item('button_align_Pnet',show_label=False),
                      ),
@@ -287,57 +284,58 @@ class DOINet(GeolabComponent):
 
         label='Opt.Net',show_border=True),
         #------------------------------------------------  
-        VGroup(HGroup('show_midpoint_edge1',
-                      'show_midpoint_edge2',
-                      'show_midpoint_polyline1',
-                      'show_midpoint_polyline2',
-                      'show_midline_mesh'),
-              HGroup('show_diagonal_red_mesh',
-                     'show_diagonal_blue_mesh',
-                     'show_diagonal_mesh',
-                     'show_revolution',
-                     ),
-              ##CGC
-              HGroup('show_oscu_tangent',
-                     'show_orient_vn',
-                     'show_cgc_centers',
-                     ),
-              
-              ##CNC
-              HGroup('show_vs_sphere',
-                     'show_snet_center',
-                     'show_snet_tangent',
-                     'show_snet_normal',),
-              
+        Group(
+            VGroup(HGroup(#'show_midpoint_edge1',
+                          #'show_midpoint_edge2',
+                          'show_midpoint_polyline1',
+                          'show_midpoint_polyline2',
+                          #'show_midline_mesh',
+                          'show_diagonal_red_mesh',
+                         'show_diagonal_blue_mesh',
+                         'show_diagonal_mesh',
+                         'show_revolution',
+                         ),
+                  ##CGC
+                  HGroup('show_oscu_tangent',
+                         'show_orient_vn',
+                         'show_cgc_centers',
+                         ),
+                  
+                  ##CNC
+                  HGroup('show_vs_sphere',
+                         'show_snet_center',
+                         'show_snet_tangent',
+                         'show_snet_normal',),
+              label='Point / Poly / Mesh',show_border=False),
+            
+              ###-------------------------------------
               ##Pnet
-              HGroup('show_orient_vn',
-                     'is_orient_tangent',
-                     'is_orient_normal',
-                     'is_remedied_BiN',
-                     'is_smoothed_BiN'),
-              HGroup('show_pseudogeo_1st_crv',
-                     'show_pseudogeo_1st_normal',
-                     'show_pseudogeo_1st_rectifystrip',
-                     'show_pseudogeo_1st_rectifystrip_unroll',
-                     ),
-              HGroup('show_pseudogeo_2nd_crv',  
-                     'show_pseudogeo_2nd_normal',
-                     'show_pseudogeo_2nd_rectifystrip',
-                     'show_pseudogeo_2nd_rectifystrip_unroll',
-                     ),
-              
-              ##unrollment
-              HGroup('strip_width','is_central_strip'),
-              HGroup('dist_inverval',
-                     'set_unroll_strip_fairness',
-                     'is_unroll_midaxis'),
-               
-        label='Plotting',show_border=True),
+              VGroup(
+                  HGroup('show_orient_vn',
+                         'is_orient_tangent',
+                         'is_orient_normal',
+                         'is_remedied_BiN',
+                         'is_smoothed_BiN'),
+                  HGroup('show_pseudogeo_1st_crv',
+                         'show_pseudogeo_1st_normal',
+                         'show_pseudogeo_1st_rectifystrip',
+                         'show_pseudogeo_1st_rectifystrip_unroll',
+                         ),
+                  HGroup('show_pseudogeo_2nd_crv',  
+                         'show_pseudogeo_2nd_normal',
+                         'show_pseudogeo_2nd_rectifystrip',
+                         'show_pseudogeo_2nd_rectifystrip_unroll',
+                         ),
+                    ##unrollment
+                    HGroup('strip_width','is_central_strip'),
+                    HGroup('dist_inverval',
+                           'set_unroll_strip_fairness',
+                           'is_unroll_midaxis'),
+                label='Strip',show_border=False),
         #------------------------------------------------  
-           #--------------------------------------
-        
+        label='Plotting',show_border=True,layout='tabbed'),
         #------------------------------------------------  
-        label='Opt',show_border=True),
+        label='Opt',show_border=False),
     #---------------------------------------------------------
     #---------------------------------------------------------
     Group(## 2nd-panel
@@ -357,23 +355,9 @@ class DOINet(GeolabComponent):
                       'fairness_diag_4diff'),
                       'fairness_reduction',
                       'fairness_diagmesh',
+               HGroup('show_corner','sharp_corner'),
                show_border=True,label='Fairness'),
-          ###-------------------------------------
-          HGroup('label',
-                 Item('save_button',show_label=False),
-                 label='Saving',show_border=True),
-          ###-------------------------------------
-          VGroup(HGroup(Item('print_check',show_label=False),
-                        Item('print_computation',show_label=False),
-                        Item('print_error',show_label=False)),
-                 label='Check',
-                 show_border=True),
-       #----------------------------------------------------------------------
-       
-       show_border=False,label='GP1'),  
-    #---------------------------------------------------------
-    #---------------------------------------------------------
-    Group(## 2nd-panel
+        ###-------------------------------------
         VGroup(HGroup(Item('close5',show_label=False),
                       Item('close1',show_label=False),
                       Item('close05',show_label=False),
@@ -395,14 +379,16 @@ class DOINet(GeolabComponent):
                       # 'glide_7th_bdry',
                       # 'glide_8th_bdry',
                       ),
-               HGroup('show_corner',
-                      'sharp_corner'),
                show_border=True,label='Closeness'),
-          ###-------------------------------------
-       show_border=False,label='GP2'), 
+        
+        HGroup(Item('print_check',show_label=False),
+                      Item('print_computation',show_label=False),
+                      Item('print_error',show_label=False)),
+       #----------------------------------------------------------------------
+       show_border=False,label='GP1'),  
     #---------------------------------------------------------
     #---------------------------------------------------------
-    Group(## 2nd-panel
+    Group(## 3rd-panel
          VGroup(HGroup('weight_fix'),
                 HGroup(
                        'fix_all',
@@ -415,24 +401,27 @@ class DOINet(GeolabComponent):
                        Item('fix_p_weight',show_label=False),),
                 HGroup(Item('fix_button',show_label=False),
                        Item('unfix_button',show_label=False),
-                       Item('clearfix_button',show_label=False)),    
-             show_border=True,label='select'),   
+                       Item('clearfix_button',show_label=False)),  
+             show_border=True,label='select'),          
           ###-------------------------------------
-       show_border=False,label='GP3'),                             
-             #-----------------
-             show_border=False,
-             layout='tabbed'),  
-             #----------------
-             HGroup(Item('interactive',
-                         tooltip='InteractiveOptimization',),
-                    Item('_'),
-                    Item('optimize',show_label=False),
-                    Item('reinitialize',show_label=False),
-                    'hide_face','hide_edge',
-                    show_border=False),     
+          HGroup('label',
+                 Item('save_button',show_label=False),
+                 label='Saving',show_border=True),
+          ###-------------------------------------
+       show_border=False,label='GP2'),                   
+    #-----------------
+    show_border=False,layout='tabbed'),  
+    #---------------------------------------------------------
+    #---------------------------------------------------------
+    HGroup(Item('interactive',
+                tooltip='InteractiveOptimization',),
+           Item('_'),
+           Item('optimize',show_label=False),
+           Item('reinitialize',show_label=False),
+           'hide_face','hide_edge',
+           show_border=False),     
          #----------------    
-         show_labels=False,
-         show_border=False),                
+         show_labels=False,show_border=False),                
     resizable=True,
     width = 0.04,
     )
@@ -1272,7 +1261,7 @@ class DOINet(GeolabComponent):
             self.meshmanager.plot_vectors(anchor=an,vectors=t1,position='tail',
                                           color = 'r',name = name+'1') 
             self.meshmanager.plot_vectors(anchor=an,vectors=t2,position='tail',
-                                          color = 'black',name = name+'2') 
+                                          color = 'b',name = name+'2') 
         else:
             self.meshmanager.remove([name+'1',name+'2'])
 
@@ -1280,8 +1269,9 @@ class DOINet(GeolabComponent):
     def plot_cgc_centers(self):
         name = 'cgc_c'
         if self.show_cgc_centers:  
-            Cg1,Cg2,rho1,rho2 = self.optimizer.get_geodesic_curvature(self.switch_diag_or_ctrl)
-            print('geodesic radius:',np.max(rho1),np.max(rho2))
+            Cg1,Cg2,rho = self.optimizer.get_geodesic_curvature(self.switch_diag_or_ctrl)
+            #print('geodesic radius:',np.max(rho1),np.max(rho2))
+            print('rho=',rho)
             V = self.mesh.vertices[self.mesh.ver_rrv4f4]
             
             from archgeolab.archgeometry.curves import make_polyline_from_endpoints
