@@ -67,6 +67,8 @@ class MMesh(Mesh):
         self._all_rr_polylines_num = None
         self._all_rr_polylines_vstar_order = None
         self._all_rr_diag_polylines_vstar_order = None
+        self._all_rr_continuous_diag_polylist = None
+        self._all_rr_diag_polylines_vnum_arr = None
         
         self._ver_bod_valence3_neib = None
         self._ver_inn_valence3_neib = None
@@ -251,6 +253,23 @@ class MMesh(Mesh):
         return self._all_rr_continuous_polylist  
 
     @property
+    def all_rr_continuous_diag_polylist(self):
+        "may include the boundary vertices,which are not regular"
+        if self._all_rr_continuous_diag_polylist is None:
+            one,another = self.all_rr_diag_polylist
+            def get_list(one):
+                pllist = []
+                for pl in one[0]:
+                    if pl[0]==pl[-1]:
+                        pl.append(pl[1])
+                    pllist.append(pl)
+                return pllist
+            list1 = get_list(one)
+            list2 = get_list(another)
+            self._all_rr_continuous_diag_polylist = [list1,list2]
+        return self._all_rr_continuous_diag_polylist  
+    
+    @property
     def all_rr_polylines_num(self):
         "number of polylines"
         if self._all_rr_polylines_num is None:
@@ -284,6 +303,31 @@ class MMesh(Mesh):
             self._all_rr_polylines_vnum_arr = [arr13, arr24]
         return self._all_rr_polylines_vnum_arr  
 
+    @property
+    def all_rr_diag_polylines_vnum_arr(self):
+        "except boundary vertices,which are not regular"
+        "sum_crossReference(arr13,arr24) = num_allVertcies"
+        if self._all_rr_diag_polylines_vnum_arr is None:
+            rrv = self.ver_rrv4f4
+            one,another = self.all_rr_continuous_diag_polylist
+            arr13,arr24 = [],[]
+            for ilist in one:
+                num = 0
+                for i in ilist:
+                    if i in rrv:
+                        num += 1
+                arr13.append(num)
+            for ilist in another:
+                num = 0
+                for i in ilist:
+                    if i in rrv:
+                        num += 1
+                arr24.append(num)
+            arr13 = np.array(arr13,dtype=int)
+            arr24 = np.array(arr24,dtype=int)
+            self._all_rr_diag_polylines_vnum_arr = [arr13, arr24]
+        return self._all_rr_diag_polylines_vnum_arr  
+    
     @property
     def all_rr_polylines_v_vstar_order(self):
         "return: poly-crv-v in vstar"

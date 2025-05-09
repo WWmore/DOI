@@ -443,7 +443,7 @@ class GP_DOINet(GuidedProjectionBase):
         
         if self.get_weight('Snet'):
             r = self.get_weight('Snet_constR')
-            x_snet,Nv4 = self.get_snet(r,self.is_diag_or_ctrl)
+            x_snet,_ = self.get_snet(r,self.is_diag_or_ctrl)
             X = np.r_[X,x_snet]
 
         ### Pnet:
@@ -819,7 +819,7 @@ class GP_DOINet(GuidedProjectionBase):
         else:
             v0,v1,v2,v3,v4 = self.mesh.rrv4f4
         
-        _,vN,_ = self.mesh.get_v4_orient_unit_normal(self.is_diag_or_ctrl)
+        _,vN,_ = self.mesh.get_v4_orient_unit_normal(is_diagnet)
         
         eps = np.finfo(float).eps
         
@@ -846,11 +846,12 @@ class GP_DOINet(GuidedProjectionBase):
         return Cg1, Cg2, rho #rho1,rho2 ##used for checking
 
 
-    def get_CGC_circular_strip(self,width,centerline=False,is_smooth=False):
+    def get_CGC_circular_strip(self,width,is_diagnet=False,
+                               is_centerline=False,is_smooth=False):
         v = self.mesh.ver_rrv4f4
         an = self.mesh.vertices[v]
         if self.is_initial: 
-            Cg1, Cg2, rho = self.get_geodesic_curvature(self.is_diag_or_ctrl)
+            Cg1, Cg2, rho = self.get_geodesic_curvature(is_diagnet)
         else:
             num = len(v)
             c_cg1 = self._Ncgc - 6*num - 1 + np.arange(3*num)
@@ -860,14 +861,11 @@ class GP_DOINet(GuidedProjectionBase):
 
         T1, T2 = Cg1 - an, Cg2 - an
         eps = np.finfo(float).eps 
-        T1 = T1 / (np.linalg.norm(T1,axis=1)[:,None]+eps)
-        T2 = T2 / (np.linalg.norm(T2,axis=1)[:,None]+eps)
+        unitT1 = T1 / (np.linalg.norm(T1,axis=1)[:,None]+eps)
+        unitT2 = T2 / (np.linalg.norm(T2,axis=1)[:,None]+eps)
+        T1, T2 = unitT1 * width, unitT2 * width
 
-        T1 *= width*2
-        T2 *= width*2
-        ind1,ind2 = self.mesh.all_rr_polylines_v_vstar_order
-        arr1,arr2 = self.mesh.all_rr_polylines_vnum_arr
-        if centerline:
+        if is_centerline:
             "strip's centerline pass through the polyline"
             an1 = an - 0.5*T1
             an2 = an - 0.5*T2
@@ -875,14 +873,56 @@ class GP_DOINet(GuidedProjectionBase):
             "strip's bottomcrv pass through the polyline"
             an1=an2 = an
 
+        if is_diagnet:
+            ind1,ind2 = self.mesh.all_rr_diag_polylines_v_vstar_order
+            arr1,arr2 = self.mesh.all_rr_diag_polylines_vnum_arr
+        else:
+            ind1,ind2 = self.mesh.all_rr_polylines_v_vstar_order
+            arr1,arr2 = self.mesh.all_rr_polylines_vnum_arr
+    
         sm1 = get_strip_from_rulings(an1[ind1],T1[ind1],arr1,is_smooth)
         sm2 = get_strip_from_rulings(an2[ind2],T2[ind2],arr2,is_smooth)
         return sm1,arr1,sm2,arr2
 
-    def get_CNC_circular_strip(self,width,centerline=False,is_smooth=False):#TODO
+    def get_CNC_circular_strip(self,width,is_diagnet=False,
+                               is_centerline=False,is_smooth=False):
         v = self.mesh.ver_rrv4f4
-        an = self.mesh.vertices[v]        
+        an = self.mesh.vertices[v]     
+        if self.is_initial: 
+            centers,_ = self.get_snet_data(is_diagnet,center=True)
+        else:
+            num = len(v)
+            _n1 = self._Nsnet-11*num
+            arr1 = np.arange(num)
+            c_a = _n1+5*num+arr1
+            c_b,c_c,c_d = c_a+num,c_a+2*num,c_a+3*num
+            "sphere center C:= (m1,m2,m3) = -(b, c, d) /a/2"
+            a,b,c,d = self.X[c_a],self.X[c_b],self.X[c_c],self.X[c_d]
+            centers = -0.5*np.c_[b/a,c/a,d/a]
         
+        ## below is same as get_CGC_circular_strip
+        eps = np.finfo(float).eps 
+        unitN = (an-centers) / (np.linalg.norm(an-centers,axis=1)[:,None]+eps)
+        N = unitN * width
+        
+        if is_centerline:
+            "strip's centerline pass through the polyline"
+            an1 = an - 0.5*N
+            an2 = an - 0.5*N
+        else:
+            "strip's bottomcrv pass through the polyline"
+            an1=an2 = an
+
+        if is_diagnet:
+            ind1,ind2 = self.mesh.all_rr_diag_polylines_v_vstar_order
+            arr1,arr2 = self.mesh.all_rr_diag_polylines_vnum_arr
+        else:
+            ind1,ind2 = self.mesh.all_rr_polylines_v_vstar_order
+            arr1,arr2 = self.mesh.all_rr_polylines_vnum_arr
+            
+        sm1 = get_strip_from_rulings(an1[ind1],N[ind1],arr1,is_smooth)
+        sm2 = get_strip_from_rulings(an2[ind2],N[ind2],arr2,is_smooth)
+        return sm1,arr1,sm2,arr2        
 
     def get_snet(self,is_r,is_diagnet=False,is_orient=True):
         """
@@ -923,7 +963,7 @@ class GP_DOINet(GuidedProjectionBase):
             XA = np.r_[XA,r]
         return XA, Nv4
 
-    def get_snet_data(self,is_diagnet=False, ##note: combine together suitable for diagonal
+    def get_snet_data(self,is_diagnet=False,
                       center=False,normal=False,tangent=False,ss=False,
                       is_diag_binormal=False):
         "at star = self.rr_star"
@@ -1129,10 +1169,11 @@ class GP_DOINet(GuidedProjectionBase):
                 oN2,cos24 = _get_binormal_cos(self._Nps2,numpl24)
             return an,oN1,oN2,cos13,cos24   
         
-    def pseudogeodesic_rectifying_srf(self,width,all_on=None,centerline=False,
+    def pseudogeodesic_rectifying_srf(self,width,all_on=None,is_diagnet=False,
+                                      is_centerline=False,
                                       is_smooth=False):
         if all_on is not None:
-            if centerline:
+            if is_centerline:
                 "strip's centerline pass through the polyline"
                 an = self.mesh.vertices - 0.5*all_on
             else:
@@ -1151,21 +1192,27 @@ class GP_DOINet(GuidedProjectionBase):
             sm2 = get_strip_from_rulings(an[ind2],all_on[ind2],arr2,is_smooth)
             return sm1,arr1,sm2,arr2
         else:
+            ## below is same as get_CGC_circular_strip,get_CNC_circular_strip
             an,on1,on2,_,_ = self.data_pseudogeodesic_binormal
-            on1 *= width*2
-            on2 *= width*2
-            ind1,ind2 = self.mesh.all_rr_polylines_v_vstar_order
-            arr1,arr2 = self.mesh.all_rr_polylines_vnum_arr
-            if centerline:
+            n1 = on1 * width
+            n2 = on2 * width
+            if is_centerline:
                 "strip's centerline pass through the polyline"
-                an1 = an - 0.5*on1
-                an2 = an - 0.5*on2
+                an1 = an - 0.5*n1
+                an2 = an - 0.5*n2
             else:
                 "strip's bottomcrv pass through the polyline"
                 an1=an2 = an
+                
+            if is_diagnet:
+                ind1,ind2 = self.mesh.all_rr_diag_polylines_v_vstar_order
+                arr1,arr2 = self.mesh.all_rr_diag_polylines_vnum_arr
+            else:
+                ind1,ind2 = self.mesh.all_rr_polylines_v_vstar_order
+                arr1,arr2 = self.mesh.all_rr_polylines_vnum_arr
     
-            sm1 = get_strip_from_rulings(an1[ind1],on1[ind1],arr1,is_smooth)
-            sm2 = get_strip_from_rulings(an2[ind2],on2[ind2],arr2,is_smooth)
+            sm1 = get_strip_from_rulings(an1[ind1],n1[ind1],arr1,is_smooth)
+            sm2 = get_strip_from_rulings(an2[ind2],n2[ind2],arr2,is_smooth)
             return sm1,arr1,sm2,arr2
     
     def pseudogeodesic_rectifying_pq_normal(self,width=1):

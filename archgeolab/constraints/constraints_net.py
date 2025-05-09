@@ -692,7 +692,8 @@ def con_CNC(is_rr=False,**kwargs):
     """
 def con_Snet(orientrn,is_rrvstar=True,is_diagnet=False,
              is_uniqR=False,assigned_r=None,**kwargs):
-    """a(x^2+y^2+z^2)+(bx+cy+dz)+e=0 ; normalize: F^2 = b^2+c^2+d^2-4ae=1
+    """ X += [V^2,A,B,C,D,E,a_sqrt]
+    a(x^2+y^2+z^2)+(bx+cy+dz)+e=0 ; normalize: F^2 = b^2+c^2+d^2-4ae=1
     sphere center C:= (m1,m2,m3) = -(b, c, d) /a/2
     sphere radius:= F /a/2
     unit_sphere_normal N==-(2*A*Vx+B, 2*A*Vy+C, 2*A*Vz+D), (pointing from v to center)

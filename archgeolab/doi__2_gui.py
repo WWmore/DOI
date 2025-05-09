@@ -1427,19 +1427,21 @@ class DOINet(GeolabComponent):
     def plot_1st_or_2nd_isoline_strip(self):
         name = 'Isoline_strip'
         if self.show_CGC_strip or self.show_CNC_strip or self.show_Pnet_rectifystrip:
-            width = self.strip_width * self.mesh.mean_edge_length()
+            width = self.strip_width * self.mesh.mean_edge_length() * 0.5
             
             if self.show_CGC_strip:
-                sm1,_,sm2,_ = self.optimizer.get_CGC_circular_strip(width,self.is_central_strip)
+                sm1,_,sm2,_ = self.optimizer.get_CGC_circular_strip(
+                    width,self.switch_diag_or_ctrl,self.is_central_strip)
             elif self.show_CNC_strip:
-                pass #TODO
+                sm1,_,sm2,_ = self.optimizer.get_CNC_circular_strip(
+                    width,self.switch_diag_or_ctrl,self.is_central_strip)
             elif self.show_Pnet_rectifystrip:
                 #if self.read_vertex_normal:
                     #biN =self.anvn[1]
                 #else:
                 biN = None
                 sm1,_,sm2,_ = self.optimizer.pseudogeodesic_rectifying_srf(
-                    width,all_on=biN,centerline=self.is_central_strip)
+                    width,biN,self.switch_diag_or_ctrl,self.is_central_strip)
 
             
             if self.is_both:
@@ -1487,12 +1489,14 @@ class DOINet(GeolabComponent):
         if self.show_isolinestrip_unroll:
 
             if self.show_CGC_strip:
-                sm1,list1,sm2,list2 = self.optimizer.get_CGC_circular_strip(width,self.is_central_strip)
+                sm1,list1,sm2,list2 = self.optimizer.get_CGC_circular_strip(
+                    width,self.switch_diag_or_ctrl,self.is_central_strip)
             elif self.show_CNC_strip:
-                pass #TODO
+                sm1,list1,sm2,list2 = self.optimizer.get_CNC_circular_strip(
+                    width,self.switch_diag_or_ctrl,self.is_central_strip)
             elif self.show_Pnet_rectifystrip:
                 sm1,list1,sm2,list2 = self.optimizer.pseudogeodesic_rectifying_srf(
-                    width,centerline=self.is_central_strip)
+                    width,self.switch_diag_or_ctrl,self.is_central_strip)
             else:
                 print('!!!--Need to choose CGCstrip, CNCstrip or Pstrip!!!')
                 sys.exit()            
