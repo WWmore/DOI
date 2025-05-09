@@ -60,16 +60,23 @@ class MMesh(Mesh):
         self._vind_f1234 = None
         
         self._all_rr_polylist,self._all_rr_diag_polylist = None,None
+        
         self._all_rr_continuous_polylist = None
-        self._all_rr_polylines_vnum_arr = None
-        self._all_rr_polylines_v_vstar_order = None
-        self._all_rr_diag_polylines_v_vstar_order = None
-        self._all_rr_polylines_num = None
-        self._all_rr_polylines_vstar_order = None
-        self._all_rr_diag_polylines_vstar_order = None
         self._all_rr_continuous_diag_polylist = None
+        
+        self._all_rr_polylines_vnum_arr = None
         self._all_rr_diag_polylines_vnum_arr = None
         
+        self._all_rr_polylines_v_vstar_order = None
+        self._all_rr_diag_polylines_v_vstar_order = None
+        
+        self._all_rr_polylines_num = None
+        self._all_rr_diag_polylines_num = None
+        
+        self._all_rr_polylines_vstar_order = None
+        self._all_rr_diag_polylines_vstar_order = None
+        
+
         self._ver_bod_valence3_neib = None
         self._ver_inn_valence3_neib = None
         self._ver_inn_valence5_neib = None
@@ -277,6 +284,15 @@ class MMesh(Mesh):
             num13,num24 = len(one),len(another)
             self._all_rr_polylines_num = [num13, num24]
         return self._all_rr_polylines_num
+    
+    @property
+    def all_rr_diag_polylines_num(self):
+        "number of polylines"
+        if self._all_rr_diag_polylines_num is None:
+            one,another = self.all_rr_continuous_diag_polylist
+            num13,num24 = len(one),len(another)
+            self._all_rr_diag_polylines_num = [num13, num24]
+        return self._all_rr_diag_polylines_num    
     
     @property
     def all_rr_polylines_vnum_arr(self):
@@ -2685,7 +2701,7 @@ class MMesh(Mesh):
             return A
         return [ll1,ll2,ll3,ll4],[t1,t2],[lut1,ut1],[lut2,ut2]
 
-    def get_isoline_osculating_normal(self,is_diag=False,
+    def get_isoline_osculating_normal(self,is_diagnet=False,
                                       is_all_n=False,is_n=False,is_on=False):
         V = self.vertices
         
@@ -2700,7 +2716,7 @@ class MMesh(Mesh):
             return an,n
         
         elif is_on:
-            if is_diag:
+            if is_diagnet:
                 v13lcr,v24lcr = self.all_rr_diag_polylist_lcr
             else:
                 v13lcr,v24lcr = self.all_rr_polylist_lcr
@@ -2747,7 +2763,7 @@ class MMesh(Mesh):
                     brr = np.r_[brr,sin]
         return arr,brr
     
-    def get_isoline_normal_binormal_angles(self,is_diag=False,
+    def get_isoline_normal_binormal_angles(self,is_diagnet=False,
                                            assign=None,entire=False):
         "for each polyline: cos:=np.mean(np.einsum('ij,ij->i',vN,oN))"
         N = self.vertex_normals()
@@ -2758,19 +2774,19 @@ class MMesh(Mesh):
             alloN1 = alloN2 = N#np.zeros((self.V,3))
             alloN1[v],alloN2[v] = oN1,oN2
         if entire:
-            if is_diag:
+            if is_diagnet:
                 v13lcr,v24lcr = self.all_rr_diag_polylist_lcr
             else:
                 v13lcr,v24lcr = self.all_rr_polylist_lcr
             an13 = list(itertools.chain(*v13lcr[1]))
             an24 = list(itertools.chain(*v24lcr[1]))
             vN = N[np.r_[an13,an24]]
-            _,on1,_,on2 = self.get_isoline_osculating_normal(is_diag,is_on=True)
+            _,on1,_,on2 = self.get_isoline_osculating_normal(is_diagnet,is_on=True)
             oN = np.vstack((on1,on2))
             cos = np.einsum('ij,ij->i',vN,oN)
             return cos
         else:
-            if is_diag:
+            if is_diagnet:
                 one,another = self.all_rr_continuous_diag_polylist
             else:
                 one,another = self.all_rr_continuous_polylist

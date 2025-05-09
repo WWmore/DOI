@@ -12,14 +12,16 @@ from scipy import sparse
 #------------------------------------------------------------------------------
 """
 from constraints_basic import 
-    column3D,con_edge,con_unit,con_constl,con_equal_length,con_symmetry,\
+    column3D,con_edge,con_unit,con_constl,con_equal_length,con_symmetry,
     con_planarity,con_planarity_constraints,con_unit_normal,
-    con_orient,con_orient1,con_orient2,con_cross,con_osculating_tangent,
+    con_orient,con_cross,con_osculating_tangent,
     con_ortho,con_orthogonal_2vectors,
-    con_dependent_vector,con_equal_opposite_angle,
-    con_constangle2,con_constangle3,con_constangle4,con_positive,con_negative,\
-    con_diagonal2,con_circle
+    con_dependent_vector,con_equal_opposite_angle,con_constangle4,
+    con_diagonal2,con_circle,
+    con_constangle2,con_constangle3,con_positive,con_negative,con_orient1,con_orient2,
 """
+#    # con_unique_angle1,con_unique_angle3,con_const_angle_cos1,con_const_angle_sin1,
+    # con_multiply,con_unit_decomposition
 # -------------------------------------------------------------------------
 #                           general / basic
 # -------------------------------------------------------------------------
@@ -83,25 +85,6 @@ def con_constl(c_ld1,init_l1,N):
     H = sparse.coo_matrix((data,(row,col)), shape=(num, N))
     return H,r
 
-def con_positive(X,c_K,c_a):
-    "K=a^2"
-    num = len(c_a)
-    col = np.r_[c_a,c_K]
-    row = np.tile(np.arange(num),2)
-    data = np.r_[2*X[c_a],-np.ones(num)]
-    r = X[c_a]**2
-    H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
-    return H,r
-
-def con_negative(X,c_K,c_a,num):
-    "K=-a^2"
-    col = np.r_[c_a,c_K]
-    row = np.tile(np.arange(num),2)
-    data = np.r_[2*X[c_a],np.ones(num)]
-    r = X[c_a]**2
-    H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
-    return H,r
-
 def con_constangle2(X,c_u1,c_u2,c_a):
     "u1*u2 = a; a is 1 variable!"
     num = int(len(c_u1)/3)
@@ -129,6 +112,25 @@ def con_constangle4(X,c_on,n_xyz,sin):
     col = c_on
     data = n_xyz
     r = sin
+    H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
+    return H,r
+
+def con_positive(X,c_K,c_a):
+    "K=a^2"
+    num = len(c_a)
+    col = np.r_[c_a,c_K]
+    row = np.tile(np.arange(num),2)
+    data = np.r_[2*X[c_a],-np.ones(num)]
+    r = X[c_a]**2
+    H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
+    return H,r
+
+def con_negative(X,c_K,c_a,num):
+    "K=-a^2"
+    col = np.r_[c_a,c_K]
+    row = np.tile(np.arange(num),2)
+    data = np.r_[2*X[c_a],np.ones(num)]
+    r = X[c_a]**2
     H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
     return H,r
 

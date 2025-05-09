@@ -14,9 +14,12 @@ from archgeolab.constraints.constraints_basic import column3D,con_edge,\
     con_unit,con_constl,con_equal_length,con_symmetry,\
     con_planarity,con_unit_normal,con_diagonal,con_osculating_tangent,\
     con_equal_opposite_angle,con_dependent_vector,con_cross,\
+    con_orient,con_ortho,con_orthogonal_2vectors,con_circle,\
     con_constangle2,con_constangle3,con_positive,con_negative,\
-    con_orient,con_orient1,con_orient2,con_ortho,con_orthogonal_2vectors,\
-    con_diagonal2,con_circle
+    con_orient1,con_orient2,con_diagonal2
+    # con_unique_angle1,con_unique_angle3,con_const_angle_cos1,con_const_angle_sin1,\
+    # con_multiply,con_unit_decomposition
+
 # -------------------------------------------------------------------------
 """
 from archgeolab.constraints.constraints_net import 
@@ -934,20 +937,28 @@ def con_Anet(is_rrvstar=False,is_diagnet=False,**kwargs):
     #                       P-net:
     #--------------------------------------------------------------------------  
 
-def con_Pnet(is_diag=False,is_rrvstar=False,**kwargs):
+def con_Pnet(is_diagnet=False,is_dev=False,is_unique_angle=False,coss=None,**kwargs):
     """Pnet: pseudo-geodesic net: kg/kn=const.
+    merged from con_pseudogeodesic_pattern (updated from con_1family_pseudogeodesic)
     """
+    w = kwargs.get('Pnet')
     
-def con_pseudogeodesic_pattern(name,is_orient=False,
-                               is_aotu=False,
-                               is_pq=False,
+    H1, r1 = con_pseudogeodesic_pattern('pseudogeo_1st',is_diagnet,True,
+                                        is_dev,is_unique_angle,coss,**kwargs)
+    H2, r2 = con_pseudogeodesic_pattern('pseudogeo_2nd',is_diagnet,True,
+                                        is_dev,is_unique_angle,coss,**kwargs)
+    
+    # H1,r1 = con_1family_pseudogeodesic('pseudogeo_1st',None,is_diagnet,U1xyz,
+    #                                  is_unique_angle,coss,**kwargs)
+    # H2,r2 = con_1family_pseudogeodesic('pseudogeo_2nd',None,is_diagnet,U2xyz,
+    #                                  is_unique_angle,coss,**kwargs)
+    
+    H, r = sparse.vstack((H1,H2)), np.r_[r1,r2]
+    return H*w, r*w
+    
+def con_pseudogeodesic_pattern(name,is_diagnet=False,is_orient=True,
                                is_dev=False,
-                               is_unique_angle=False,
-                               coss=None,
-                               is_unique_width=False,
-                               is_const_width=False,
-                               width=None,
-                               **kwargs):
+                               is_unique_angle=False,coss=None,**kwargs):
     """ based on self.orient_rr_vn=True: X +=[vN,a]
             unit vN://(e1-e3) x (e2-e4); vN*Nv=a^2
             <==> [vN*(e1-e3)=0; vN*(e2-e4)=0; vn^2=1;vN*Nv=a^2]
@@ -963,18 +974,30 @@ def con_pseudogeodesic_pattern(name,is_orient=False,
          if aotu: 
              on[ao]*(e2[ao]-e4[ao]) = b[ao]^2
              on[tu]*(e2[tu]-e4[tu]) = b[tu]^2
-             
-             
+
     """ 
+    w = kwargs.get('Pnet')
     mesh = kwargs.get('mesh')
     X = kwargs.get('X')
-    N = kwargs.get('N')
-    Nn = kwargs.get('Norient')
-    num = mesh.num_rrv4f4
+    numV = mesh.V
+ 
+    if is_diagnet:
+        v,v1,v2,v3,v4 = mesh.rr_star_corner
+        numpl1,numpl2 = mesh.all_rr_diag_polylines_num
+        ind1,ind2 = mesh.all_rr_diag_polylines_vstar_order
+    else:
+        v,v1,v2,v3,v4 = mesh.rrv4f4
+        numpl1,numpl2 = mesh.all_rr_polylines_num
+        ind1,ind2 = mesh.all_rr_polylines_vstar_order
+        
+    num = len(v)
+    c_v = column3D(v,0,numV) 
+    
     arr,arr3 = np.arange(num),np.arange(3*num)
-    c_n = arr3 + Nn-4*num
-    v,v1,v2,v3,v4 =mesh.rrv4f4
-    c_v = column3D(v,0,mesh.V) 
+
+    Norient = kwargs.get('Norient')
+    c_n = Norient-4*num + arr3
+ 
     N5 = kwargs.get('N5')
     c_ue1 = column3D(arr,N5-12*num,num)
     c_ue2 = column3D(arr,N5-9*num,num)
@@ -992,19 +1015,16 @@ def con_pseudogeodesic_pattern(name,is_orient=False,
         return H,r
     
     if name=='pseudogeo_1st':
-        w = kwargs.get('pseudogeo_1st')
         Nps = kwargs.get('Nps1')
-        numpl = mesh.all_rr_polylines_num[0]
-        c_va = column3D(v1,0,mesh.V)
-        c_vb = column3D(v3,0,mesh.V)
-        ind = mesh.all_rr_polylines_vstar_order[0]
+        c_va = column3D(v1,0,numV)
+        c_vb = column3D(v3,0,numV)
+        numpl, ind = numpl1, ind1
+        
     elif name == 'pseudogeo_2nd':
-        w = kwargs.get('pseudogeo_2nd')
         Nps = kwargs.get('Nps2')
-        numpl = mesh.all_rr_polylines_num[1]
-        c_va = column3D(v2,0,mesh.V)
-        c_vb = column3D(v4,0,mesh.V)
-        ind = mesh.all_rr_polylines_vstar_order[1]
+        c_va = column3D(v2,0,numV)
+        c_vb = column3D(v4,0,numV)
+        numpl, ind = numpl2, ind2
 
     if is_unique_angle:
         numpl = 1
@@ -1013,7 +1033,7 @@ def con_pseudogeodesic_pattern(name,is_orient=False,
         Ha,ra = con_constangle2(X,c_on,c_n,c_cos)
         #sin = np.sqrt(1-X[c_cos]**4)*np.ones(num)
         if coss:
-            Hu,ru = con_constl(np.array([c_cos],dtype=int),coss,N)
+            Hu,ru = con_constl(np.array([c_cos],dtype=int),coss,len(X))
             Ha = sparse.vstack((Ha,Hu))
             ra = np.r_[ra,ru]
             #sin = np.sqrt(1-coss**2)*np.ones(num)
@@ -1036,103 +1056,34 @@ def con_pseudogeodesic_pattern(name,is_orient=False,
     #print('a:', np.sum(np.square((Ha*X)-ra)))
     # print('H:', np.sum(np.square((H*X)-r)))
     
-    if is_orient:
+    if is_orient: ##True in default
         vN = X[c_n].reshape(-1,3,order='F')
         if name=='pseudogeo_1st':
             "vn*on1=cos1=a1^2;on1*(e2-e4)=b1^2"
             t = (X[c_ue1]-X[c_ue3]).reshape(-1,3,order='F')
-            c_el,c_er = c_ue2,c_ue4
             c_b = kwargs.get('Nps_orient1')-num+arr
             c_a = kwargs.get('Nps_orient1')-num-numpl+np.arange(numpl)
         elif name == 'pseudogeo_2nd':
             "on2*(e1-e3)=b2^2"
             t = (X[c_ue2]-X[c_ue4]).reshape(-1,3,order='F')
-            c_el,c_er = c_ue1,c_ue3
             c_b = kwargs.get('Nps_orient2')-num+arr
             c_a = kwargs.get('Nps_orient2')-num-numpl+np.arange(numpl)
         T = t/np.linalg.norm(t,axis=1)[:,None]
         U = np.cross(vN,T)/np.linalg.norm(np.cross(vN,T),axis=1)[:,None]
         Uxyz = U.flatten('F')
-        if is_aotu:
-            "everysecond polyline are same orientation"
-            if name=='pseudogeo_1st':
-                even,odd = mesh.all_rr_polylines_everysecond_index[0]
-            elif name == 'pseudogeo_2nd':
-                even,odd = mesh.all_rr_polylines_everysecond_index[1]
-            pos = np.r_[even,even+num,even+2*num]
-            neg = np.r_[odd,odd+num,odd+2*num]
 
-            i_ao = np.r_[np.arange(numpl)[::4],np.arange(numpl)[1::4]]
-            i_tu = np.r_[np.arange(numpl)[2::4],np.arange(numpl)[3::4]]
-            
-            "Ao: orient with vN & t:"
-            Hao,rao = con_positive(X,c_cos[i_ao],c_a[i_ao])
-            Hpos,rpos = con_orient1(X,c_on[pos],c_el[pos],c_er[pos],c_b[even])
-            #Hpos,rpos = con_constangle4(X,c_on[pos],n_xyz[pos],sin[even]) ##need to check
-            "Tu: orient with -vN & -t:"
-            Htu,rtu = con_negative(X,c_cos[i_tu],c_a[i_tu],len(i_tu))
-            Hneg,rneg = con_orient1(X,c_on[neg],c_er[neg],c_el[neg],c_b[odd],True)
-            #Hneg,rneg = con_constangle4(X,c_on[neg],n_xyz[neg],sin[odd]) ##need to check
-            H = sparse.vstack((H,Hao,Hpos,Htu,Hneg))
-            r = np.r_[r,rao,rpos,rtu,rneg]
-            # H = sparse.vstack((H,Hao,Hpos))
-            # r = np.r_[r,rao,rpos]
-            #print('1:', np.sum(np.square((Hao*X)-rao)))
-            #print('2:', np.sum(np.square((Hpos*X)-rpos)))
-            print('3:', np.sum(np.square((Htu*X)-rtu)))
-            print('4:', np.sum(np.square((Hneg*X)-rneg)))
-            print('e:', np.sum(np.square((H*X)-r)))
-        else:
-            "<Curved-pleated structure> case: sharp mountain / valley"
-            "orient with vN: vn*on1=cos1=a1^2"
-            Ha,ra = con_positive(X,c_cos,c_a)
-            #"orient with t: on*(el-er)=b^2"
-            #Hb,rb = con_orient1(X, c_on, c_el, c_er, c_b)
-            "orient with t: on*(n x t1)=b^2:=sin=sqrt(1-cos^2):=sqrt(1-a^4)"
-            Hb,rb = con_orient2(X,c_on,Uxyz,c_b)
-            #Hb,rb = con_constangle4(X,c_on,Uxyz,sin)
-            H = sparse.vstack((H,Ha,Hb))
-            r = np.r_[r,ra,rb]
-            #print('cos=a^2:', np.sum(np.square((Ha*X)-ra)))
-            #print('on*U=sqrt(1-a^4):', np.sum(np.square((Hb*X)-rb)))
-    
-    if is_pq: ###No use now. replace by below is_dev
-        """ if pq1: the family of 1st-pseudogeodesic rectifying quads are planar
-            if pq2: the 2nd.....
-            if both: both ... are planar
-        """
-        id13l,id13r,id24l,id24r = mesh.all_rr_polylines_pq_vstar_order
-        onx,ony,onz = c_on[:num],c_on[num:2*num],c_on[2*num:]
-        vx,vy,vz = c_v[:num],c_v[num:2*num],c_v[2*num:]
-        if name=='pseudogeo_1st':
-            "pn1*oni = pn1*onj = pn1*(vi-vj)=0"
-            numpq=len(id13l)
-            c_pn = kwargs.get('Nps_pq1')-3*numpq+np.arange(3*numpq)
-            c_oni = np.r_[onx[id13l],ony[id13l],onz[id13l]]
-            c_onj = np.r_[onx[id13r],ony[id13r],onz[id13r]]
-            c_vi = np.r_[vx[id13l],vy[id13l],vz[id13l]]
-            c_vj = np.r_[vx[id13r],vy[id13r],vz[id13r]]
-        elif name == 'pseudogeo_2nd':
-            "pn2*oni = pn2*onj = pn2*(vi-vj)=0"
-            numpq=len(id24l)
-            c_pn = kwargs.get('Nps_pq2')-3*numpq+np.arange(3*numpq)
-            c_oni = np.r_[onx[id24l],ony[id24l],onz[id24l]]
-            c_onj = np.r_[onx[id24r],ony[id24r],onz[id24r]]
-            c_vi = np.r_[vx[id24l],vy[id24l],vz[id24l]]
-            c_vj = np.r_[vx[id24r],vy[id24r],vz[id24r]]
-        
-        def _planar_rectify_srf(c_pn,c_oni,c_onj,c_vi,c_vj):
-            "pn*oni = pn*onj = pn*(vi-vj)=0"
-            H1,r1 = con_orthogonal_2vectors(X,c_pn,c_oni)
-            H2,r2 = con_orthogonal_2vectors(X,c_pn,c_onj)
-            H3,r3 = con_planarity(X,c_vi,c_vj,c_pn)
-            H4,r4 = con_unit(X,c_pn)
-            H = sparse.vstack((H1,H2,H3,H4))
-            r = np.r_[r1,r2,r3,r4]
-            return H,r
-        Hi,ri = _planar_rectify_srf(c_pn,c_oni,c_onj,c_vi,c_vj)
-        H = sparse.vstack((H,Hi))
-        r = np.r_[r,ri]
+        "<Curved-pleated structure> case: sharp mountain / valley"
+        "orient with vN: vn*on1=cos1=a1^2"
+        Ha,ra = con_positive(X,c_cos,c_a)
+        #"orient with t: on*(el-er)=b^2"
+        #Hb,rb = con_orient1(X, c_on, c_el, c_er, c_b)
+        "orient with t: on*(n x t1)=b^2:=sin=sqrt(1-cos^2):=sqrt(1-a^4)"
+        Hb,rb = con_orient2(X,c_on,Uxyz,c_b)
+        #Hb,rb = con_constangle4(X,c_on,Uxyz,sin)
+        H = sparse.vstack((H,Ha,Hb))
+        r = np.r_[r,ra,rb]
+        #print('cos=a^2:', np.sum(np.square((Ha*X)-ra)))
+        #print('on*U=sqrt(1-a^4):', np.sum(np.square((Hb*X)-rb)))
 
     if is_dev:
         """ in fact no need below, since on // eixej,alpha=bet=90
@@ -1153,46 +1104,12 @@ def con_pseudogeodesic_pattern(name,is_orient=False,
         H = sparse.vstack((H,Hd))
         r = np.r_[r,rd]
         ##print('err:', np.sum(np.square((Hd*X)-rd)))
-
-    if is_unique_width or is_const_width:
-        "[(A-C)^2; (D-B)^2]=width^2"
-        if name=='pseudogeo_1st':
-            idA,idC,idD,idB = mesh.all_rr_polylines_aotu1234_index[0]
-            Nps_width = kwargs.get('Nps_width1')
-            num_strip13 = mesh.all_rr_aotu_strips_num[0]
-            num_width = num_strip13[0]+num_strip13[2]
-            arr_AC,arr_DB = mesh.all_rr_aotu_strip_width_arr[0]
-        elif name == 'pseudogeo_2nd':
-            idA,idC,idD,idB = mesh.all_rr_polylines_aotu1234_index[1]
-            Nps_width = kwargs.get('Nps_width2')
-            num_strip24 = mesh.all_rr_aotu_strips_num[1]
-            num_width = num_strip24[0]+num_strip24[2]
-            arr_AC,arr_DB = mesh.all_rr_aotu_strip_width_arr[1]
-        "NOTE: HAS PROBLEM FOR different len(A)!=len(C); len(D)!=len(B)"
-        ia,ib = min(len(idA),len(idC)), min(len(idD),len(idB))
-        #print(len(idA),len(idC),len(idD),len(idB),ia,ib)
-        idA,idC,idD,idB = idA[:ia],idC[:ia],idD[:ib],idB[:ib]
-        #print(len(idA),len(idC),len(idD),len(idB))
-        v_AD, v_CB = v[np.r_[idA,idD]], v[np.r_[idC,idB]]
-        c_AD = column3D(v_AD,0,mesh.V)
-        c_CB = column3D(v_CB,0,mesh.V)
-        if is_unique_width:
-            c_width = Nps_width-1
-            Hw,rw = con_diagonal2(X,c_AD,c_CB,c_width)
-        else:
-            "c_width ~ [arrAC; arrDB]"
-            c_width = Nps_width - num_width + np.arange(num_width)
-            c_w = np.array([],dtype=int)
-            arr = np.r_[arr_AC, arr_DB]
-            for i in range(num_width):
-                c_w = np.r_[c_w,np.tile(c_width[i],arr[i])]
-            #print(len(v_AD),len(c_w),num_width,len(arr))
-            Hw,rw = con_circle(X,c_AD,c_CB,c_w)
-        H = sparse.vstack((H,Hw))
-        r = np.r_[r,rw]
     
     #print('err:', np.sum(np.square((H*X)-r)))
     return H*w,r*w
+
+    
+
     #--------------------------------------------------------------------------
     #                      rulings:
     #-------------------------------------------------------------------------- 

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on Thu Apr 24 11:13:42 2025
 
@@ -135,6 +134,8 @@ class DOINet(GeolabComponent):
     
     GPC_net = Bool(label='GPC')
     
+    orient_rrv_normal = Bool(False,label='orientN')
+    
     switch_GO_or_OG = Bool(True,label='_GO|OG_')  ## need to choose when window opens; choose geodesic-isoline direction
     switch_diag_or_ctrl = Bool(False,label='_Diag|Ctrl_') ## need to choose when window opens; choose on diagonal net or control net
     
@@ -147,8 +148,7 @@ class DOINet(GeolabComponent):
     is_Kite_diagGPC = Bool(label='is_Kite-GPC')
     is_Kite_diagGPC_SIR = Bool(label='is_Kite-GPC-SIR')
 
-    button_align_diagKite = Button(label='A-DiagKite')
-    button_align_ctrlKite = Button(label='A-Kite')
+    button_align_Kite = Button(label='A-Kite')
     button_align_CGC = Button(label='A-CGC')
     button_align_CNC = Button(label='A-CNC')
     button_align_Pnet = Button(label='A-Pnet')
@@ -168,24 +168,16 @@ class DOINet(GeolabComponent):
     button_minimal_mesh = Button(label='Minimal')
     
     oscu_rrv_tangent = Bool(False,label='oscuT')
-
-    ##Pseudogeodesic-net:
-    orient_rrv_normal = Bool(False,label='orientN')
-    Pseudogeodesic_net = Bool(label='Pnet')
-
-    pseudogeo_allSameAngle = Bool(label='uniqAngle')
     
     switch_1st_or_2nd = Bool(False,label='_1st|2nd_')
-    is_both = Bool(label='is_both')#TODO
-    
-    pseudogeo_1st = Bool(label='PS1st') ##1st-isoline being pseudo-geodesic
-    #pseudogeo_2nd = Bool(label='PS2nd') ##2nd-isoline being pseudo-geodesic
-    pseudogeo_orient = Bool(True,label='PSOrientON')
-    pseudogeo_constwidth = Bool(label='constWidth')
-    pseudogeo_uniquewidth = Bool(label='uniqWidth')##exchange with ps-constwidth
+    is_both = Bool(label='is_both')#TODO    
+
+    ##Pseudogeodesic-net:
+    Pseudogeodesic_net = Bool(label='Pnet')
     #pseudogeo_rectify_dvlp = Bool(label='Develop')
-    is_psangle1 = Bool(label='Const.Angle')
-    pseudogeo_1st_constangle = Float(90)## const.angle of <normal,tangentplane>
+    #pseudogeo_allSameAngle = Bool(label='uniqAngle')##default is True
+    is_assigned_angle = Bool(label='Assigned')
+    assigned_angle = Float(90)## const.angle of <normal,tangentplane>
     
 
     #--------------Plotting: -----------------------------
@@ -215,7 +207,7 @@ class DOINet(GeolabComponent):
     show_isoline = Bool(label='Crv')
     
     show_CGC_strip = Bool(label='CGCstrip')
-    show_CNC_strip = Bool(label='CNCstrip') #TODO
+    show_CNC_strip = Bool(label='CNCstrip')
     
     show_pseudogeo_binormal = Bool(label='Pnet-BiN')
     show_Pnet_rectifystrip = Bool(label='Pstrip')
@@ -249,37 +241,32 @@ class DOINet(GeolabComponent):
               HGroup('switch_GO_or_OG', 'switch_diag_or_ctrl',
                      'oscu_rrv_tangent',
                      'orient_rrv_normal',
-                     Item('button_clear_constraint',show_label=False)),    
+                     ),    
               #HGroup('orthogonal','GPC_net'),
-              HGroup('DOI_net','is_DOI_SIR','is_DOI_SIR_diagKite'),
-              HGroup('Kite_net','is_Kite_diagGPC','is_Kite_diagGPC_SIR'),
-              HGroup('CGC_net','Gnet',
-                     'CNC_net','Anet',),
-              # HGroup('Snet',
-              #        #'Snet_orient',
-              #        'Snet_constR',
-              #        Item('if_uniqR',show_label=False),
-              #        'Snet_constR_assigned'),
-
-              HGroup('Pseudogeodesic_net','pseudogeo_orient',
-              # HGroup('pseudogeo_1st',
-              #        'pseudogeo_2nd',),
-                     'pseudogeo_allSameAngle',
-                     'pseudogeo_uniquewidth',
-                     'pseudogeo_constwidth',
-                     ),
-              HGroup('is_psangle1',
-                     Item('pseudogeo_1st_constangle',show_label=False)),
-              # HGroup(Item('is_psangle2',
-              #           tooltip='2nd-Pseudogeodesic',
-              #        show_label=False),
-              #        Item('pseudogeo_2nd_constangle',show_label=False)),
+              
+              VGroup(
+                      HGroup('DOI_net','is_DOI_SIR','is_DOI_SIR_diagKite'),
+                      HGroup('Kite_net','is_Kite_diagGPC','is_Kite_diagGPC_SIR'),
+              show_border=True),
+              
+              VGroup(
+                      HGroup('CGC_net','Gnet',
+                             'CNC_net','Anet',),
+                      # HGroup('Snet',
+                      #        #'Snet_orient',
+                      #        'Snet_constR',
+                      #        Item('if_uniqR',show_label=False),
+                      #        'Snet_constR_assigned'),
+                      HGroup('Pseudogeodesic_net',
+                             'is_assigned_angle',
+                             Item('assigned_angle',show_label=False)),
+              show_border=True),
                      
-              HGroup(Item('button_align_diagKite',show_label=False),
-                     Item('button_align_ctrlKite',show_label=False),
+              HGroup(Item('button_align_Kite',show_label=False),
                      Item('button_align_CGC',show_label=False),
                      Item('button_align_CNC',show_label=False),
                      Item('button_align_Pnet',show_label=False),
+                     Item('button_clear_constraint',show_label=False)
                      ),
               #HGroup(#Item('button_CMC_mesh',show_label=False),
                      #Item('button_minimal_mesh',show_label=False),
@@ -320,14 +307,13 @@ class DOINet(GeolabComponent):
                          'is_orient_normal',
                          'is_remedied_BiN',
                          'is_smoothed_BiN'),
-                  HGroup('show_orient_vn','show_pseudogeo_binormal',),
-                  HGroup('show_CGC_strip',
-                         'show_CNC_strip',
+                  HGroup('show_orient_vn','show_pseudogeo_binormal',
                          'show_Pnet_rectifystrip',
-                         'show_isolinestrip_unroll',
-                         ),
+                         'show_CGC_strip',
+                         'show_CNC_strip',),
                     ##unrollment
-                    HGroup('strip_width','is_central_strip'),
+                    HGroup('show_isolinestrip_unroll',
+                           'strip_width','is_central_strip'),
                     HGroup('dist_inverval',
                            'set_unroll_strip_fairness',
                            'is_unroll_midaxis'),
@@ -441,6 +427,8 @@ class DOINet(GeolabComponent):
         self.ref_glide_bdry_polyline = None
 
         self.snet_normal = self.snet_diagG_binormal = None
+        
+        self.data_opt_rectifystrip = None
     # -------------------------------------------------------------------------
     #                                Properties
     # -------------------------------------------------------------------------
@@ -1038,34 +1026,17 @@ class DOINet(GeolabComponent):
             self.Snet = False
             self.Snet_orient = False
             self.Snet_constR = False
-            
-    
-    # @on_trait_change('pseudogeo_1st') ##no use
-    # def set_pseudogeo_1st(self): 
-    #     if self.pseudogeo_1st:
-    #         self.orient_rrv_normal = True
-    #     else:
-    #         self.orient_rrv_normal = False
 
-    # @on_trait_change('pseudogeo_2nd') ##no use
-    # def set_pseudogeo_2nd(self): 
-    #     if self.pseudogeo_2nd:
-    #         self.orient_rrv_normal = True
-    #     else:
-    #         self.orient_rrv_normal = False
             
     @on_trait_change('Pseudogeodesic_net')
     def set_Pnet(self): 
         if self.Pseudogeodesic_net:
-            self.pseudogeo_1st = True ##based on self.orient_rrv_normal
-            self.pseudogeo_2nd = True ##based on self.orient_rrv_normal
             self.orient_rrv_normal = True
-            self.pseudogeo_orient = True  
+            #self.pseudogeo_orient = True  
+            #self.pseudogeo_allSameAngle = True ##default is True
         else:
-            self.pseudogeo_1st = False
-            self.pseudogeo_2nd = False
             self.orient_rrv_normal = False
-            self.pseudogeo_orient = False
+            #self.pseudogeo_orient = False
             
     @on_trait_change('button_minimal_mesh')
     def set_orthogonal_Anet(self): 
@@ -1079,45 +1050,37 @@ class DOINet(GeolabComponent):
         self.Snet_orient = True
         self.Snet_constR = True
 
-    @on_trait_change('button_align_diagKite')
-    def set_align_diagKite(self): 
-        self.DOI_net = True
-        self.is_DOI_SIR = True
-        self.is_DOI_SIR_diagKite = True
 
-    @on_trait_change('button_align_ctrlKite')
+    @on_trait_change('button_align_Kite')
     def set_align_ctrlKite(self): 
-        self.Kite_net = True
-        self.is_Kite_diagGPC = True
-        self.is_Kite_diagGPC_SIR = True
+        if self.switch_diag_or_ctrl:
+            self.DOI_net = True
+            self.is_DOI_SIR = True
+            self.is_DOI_SIR_diagKite = True
+        else:
+            self.Kite_net = True
+            self.is_Kite_diagGPC = True
+            self.is_Kite_diagGPC_SIR = True
 
     @on_trait_change('button_align_CGC')
     def set_align_CGC(self): 
-        self.DOI_net = True
-        self.is_DOI_SIR = True
-        self.is_DOI_SIR_diagKite = True
-        ## diagonal Kite net of the SIR-net is a CGC-net
+        "(diagonal/control) Kite-net of the SIR-net is a CGC-net"
+        self.set_align_ctrlKite()
         self.CGC_net = True
-        self.switch_diag_or_ctrl = True
 
-    @on_trait_change('button_align_CNC') #TODO
+    @on_trait_change('button_align_CNC')
     def set_align_CNC(self): 
-        self.DOI_net = True
-        self.is_DOI_SIR = True
-        self.is_DOI_SIR_diagKite = True
-        ## diagonal Kite net of the SIR-net is a CNC-net
+        "(diagonal/control) Kite-net of the SIR-net is a CNC-net"
+        self.set_align_ctrlKite()
         self.CNC_net = True
-        self.switch_diag_or_ctrl = True
 
-    @on_trait_change('button_align_Pnet') #TODO
+    @on_trait_change('button_align_Pnet')
     def set_align_Pnet(self): 
-        self.DOI_net = True
-        self.is_DOI_SIR = True
-        self.is_DOI_SIR_diagKite = True
-        ## diagonal Kite net of the SIR-net is a P-net
+        "(diagonal/control) Kite-net of the SIR-net is a P-net"
+        self.set_align_ctrlKite()
         self.Pseudogeodesic_net = True
-        self.switch_diag_or_ctrl = True
-          
+
+       
     #---------------------------------------------------------        
     #                       Ploting
     #---------------------------------------------------------     
@@ -1396,12 +1359,18 @@ class DOINet(GeolabComponent):
     def plot_1st_or_2nd_osculatingNormal(self):
         name = 'ps-geo-n'
         if self.show_pseudogeo_binormal:
-            an,on1,on2,cos13,cos24 = self.optimizer.pseudogeodesic_binormal(
+            an,on1,on2,cs13,cs24 = self.optimizer.pseudogeodesic_binormal(
+                                            is_diagnet=self.switch_diag_or_ctrl,
                                             is_orientT=self.is_orient_tangent,
                                             is_orientN=self.is_orient_normal,
                                             is_remedy=self.is_remedied_BiN, 
                                             is_smooth=self.is_smoothed_BiN)
-            self.optimizer.data_pseudogeodesic_binormal = [an,on1,on2,cos13,cos24]
+            self.optimizer.data_pseudogeodesic_binormal = [an,on1,on2,cs13,cs24]
+            
+            if self.switch_diag_or_ctrl:
+                crvlists1,crvlists2 = self.mesh.all_rr_continuous_diag_polylist
+            else:
+                crvlists1,crvlists2 = self.mesh.all_rr_continuous_polylist##continue_family_poly
 
             if self.is_both:
                 on, clr, name1 = on1, 'r', name+'1'
@@ -1414,9 +1383,10 @@ class DOINet(GeolabComponent):
             else:
                 if self.switch_1st_or_2nd:
                     on, clr, name = on1, 'r', name+'1'
+                    self.data_opt_rectifystrip = [crvlists1,an,on1]
                 else:
                     on, clr, name = on2, 'b', name+'2'
-                
+                    self.data_opt_rectifystrip = [crvlists2,an,on2]
                 self.meshmanager.plot_vectors(anchor=an,vectors=on,position='tail',
                                               color = clr,name = name) 
                 
@@ -1644,14 +1614,8 @@ class DOINet(GeolabComponent):
         self.optimizer.assigned_snet_radius = self.Snet_constR_assigned
 
         self.optimizer.set_weight('Pnet', self.Pseudogeodesic_net)
-        self.optimizer.set_weight('pseudogeo_1st',self.pseudogeo_1st)
-        #self.optimizer.set_weight('pseudogeo_2nd',self.pseudogeo_2nd)
-        self.optimizer.is_psangle1 = self.is_psangle1
-        #self.optimizer.is_psangle2 = self.is_psangle2
-        self.optimizer.pseudogeo_1st_constangle = self.pseudogeo_1st_constangle
-        #self.optimizer.pseudogeo_2nd_constangle = self.pseudogeo_2nd_constangle
-        self.optimizer.is_pseudogeo_allSameAngle = self.pseudogeo_allSameAngle        
-        self.optimizer.is_pseudogeo_orient = self.pseudogeo_orient
+        self.optimizer.is_assigned_angle = self.is_assigned_angle 
+        self.optimizer.assigned_angle = self.assigned_angle      
         
         self.optimizer.is_GO_or_OG = self.switch_GO_or_OG 
         self.optimizer.is_diag_or_ctrl = self.switch_diag_or_ctrl
