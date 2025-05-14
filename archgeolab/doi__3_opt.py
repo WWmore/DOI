@@ -120,6 +120,7 @@ class GP_DOINet(GuidedProjectionBase):
         self.is_DOI_SIR_diagKite = False
         self.is_Kite_diagGPC = False
         self.is_Kite_diagGPC_SIR = False
+        self.is_Kite_switch = False ## switch between "|va-v|=|vd-v|.." or "|va-v|=|vc-v|.."
         
         ##pseudogeodesic project:
         self.is_pseudogeo_allSameAngle = True ##default is changed to True
@@ -556,17 +557,22 @@ class GP_DOINet(GuidedProjectionBase):
             self.add_iterative_constraint(H, r, 'orthogonal')
         
         if self.get_weight('DOI'):
-            yes1, yes2 = self.is_DOI_SIR, self.is_DOI_SIR_diagKite
             if True:
-                H,r = con_DOI__freeform(self.is_GO_or_OG,yes1,yes2,**self.weights)
+                H,r = con_DOI__freeform(self.is_GO_or_OG,
+                                        self.is_DOI_SIR,
+                                        self.is_DOI_SIR_diagKite,
+                                        self.is_Kite_switch,
+                                        **self.weights)
             else:
                 "works well, but only for patch or rotational mesh"
-                H,r = con_DOI(self.is_GO_or_OG,yes1,**self.weights)
+                H,r = con_DOI(self.is_GO_or_OG,self.is_DOI_SIR,**self.weights)
             self.add_iterative_constraint(H, r, 'DOI')
             
         if self.get_weight('Kite'):
-            yes1,yes2 = self.is_Kite_diagGPC, self.is_Kite_diagGPC_SIR
-            H,r = con_Kite(self.is_GO_or_OG,yes1,yes2,**self.weights)
+            H,r = con_Kite(self.is_diag_or_ctrl,
+                           self.is_Kite_switch,
+                           self.is_Kite_diagGPC, 
+                           self.is_Kite_diagGPC_SIR,**self.weights)
             self.add_iterative_constraint(H, r, 'Kite')
         #elif self.get_weight('Kite_diagnet'): #Hui: works but not use in alignnet on SIR-net
             #H,r = con_kite_diagnet(self.is_GO_or_OG,**self.weights)

@@ -14,9 +14,9 @@ from archgeolab.constraints.constraints_basic import column3D,con_edge,\
     con_unit,con_constl,con_equal_length,con_symmetry,\
     con_planarity,con_unit_normal,con_diagonal,con_osculating_tangent,\
     con_equal_opposite_angle,con_dependent_vector,con_cross,\
-    con_orient,con_ortho,con_orthogonal_2vectors,con_circle,\
-    con_constangle2,con_constangle3,con_positive,con_negative,\
-    con_orient1,con_orient2,con_diagonal2
+    con_orient,con_ortho,con_circle,\
+    con_constangle2,con_constangle3,con_positive,con_orient2
+    #con_orthogonal_2vectors,con_negative,con_diagonal2,con_orient1
     # con_unique_angle1,con_unique_angle3,con_const_angle_cos1,con_const_angle_sin1,\
     # con_multiply,con_unit_decomposition
 
@@ -298,7 +298,8 @@ def con_DOI(is_GO_or_OG=True,is_SIR=False,is_diagKite=False,**kwargs):
     r = np.r_[r1, r2]  
     return H*w,r*w
 
-def con_DOI__freeform(is_GO_or_OG=True,is_SIR=False,is_diagKite=False,**kwargs):
+def con_DOI__freeform(is_GO_or_OG=True,is_SIR=False,
+                      is_diagKite=False,is_Kite_switch=False,**kwargs):
     """ above fucntion con_doi defined based on vMatrix from patch or rotational mesh
     can not handle the case with unregular boundaries
     this function should work on quad mesh with even singularieis (need check)
@@ -374,8 +375,14 @@ def con_DOI__freeform(is_GO_or_OG=True,is_SIR=False,is_diagKite=False,**kwargs):
         c_vb = column3D(vb,0,V)
         c_vc = column3D(vc,0,V)
         c_vd = column3D(vd,0,V)
-        H1,r1 = con_symmetry(X,c_va,c_v,c_vd)  
-        H2,r2 = con_symmetry(X,c_vb,c_v,c_vc)  
+        if is_Kite_switch:
+            "|va-v|=|vb-v|, |vc-v|=|vd-v|"
+            H1,r1 = con_symmetry(X,c_va,c_v,c_vb)  
+            H2,r2 = con_symmetry(X,c_vc,c_v,c_vd)
+        else:
+            "|va-v|=|vd-v|, |vb-v|=|vc-v|"
+            H1,r1 = con_symmetry(X,c_va,c_v,c_vd)  
+            H2,r2 = con_symmetry(X,c_vb,c_v,c_vc)  
         H = sparse.vstack((H, H1, H2))
         r = np.r_[r, r1, r2]   
     return H*w,r*w
@@ -456,7 +463,9 @@ def con_DGPC(is_rrvstar=False,polyline_direction=False,**kwargs):
     return H*w,r*w
 
     
-def con_Kite(is_transpose=False,is_diagGPC=False,is_diagSIR=False,is_rr=False,**kwargs):
+def con_Kite(is_diagnet=False,is_Kite_switch=False,
+             is_diagGPC=False,is_diagSIR=False,
+             is_rr=False,**kwargs):
     """Kite-net: two pairs of equal edge lengths within quad and on vertex-star
 
     is_diagGPC: 
@@ -481,8 +490,12 @@ def con_Kite(is_transpose=False,is_diagGPC=False,is_diagSIR=False,is_rr=False,**
     X = kwargs.get('X')
     V = mesh.V
     
-    v,v1,v2,v3,v4 = mesh.rr_star.T
-    if is_transpose:
+    if is_diagnet:
+        v,v1,v2,v3,v4 = mesh.rr_star_corner
+    else:
+        v,v1,v2,v3,v4 = mesh.rr_star.T     
+        
+    if is_Kite_switch:
         v1,v2,v3,v4 = v2,v3,v4,v1
         
     c_v = column3D(v,0,V)
@@ -494,17 +507,15 @@ def con_Kite(is_transpose=False,is_diagGPC=False,is_diagSIR=False,is_rr=False,**
     if False: ##need check the quad-vertex oriented samely as rr-vs
         "based on each quad face: |v1-v2|=|v1-v4|, |v3-v2|=|v3-v4|"
         v1,v2,v3,v4 = mesh.rr_quadface.T
-        if is_transpose:
-            v1,v2,v3,v4 = v2,v3,v4,v1
         
         if is_rr:
             ind = mesh.ind_rr_quadface_with_rrv
             v1,v2,v3,v4 = v1[ind],v2[ind],v3[ind],v4[ind]
             
-        c_v1 = column3D(v1,0,V)
-        c_v2 = column3D(v2,0,V)
-        c_v3 = column3D(v3,0,V)
-        c_v4 = column3D(v4,0,V)
+            c_v1 = column3D(v1,0,V)
+            c_v2 = column3D(v2,0,V)
+            c_v3 = column3D(v3,0,V)
+            c_v4 = column3D(v4,0,V)
         
         H1,r1 = con_symmetry(X,c_v2,c_v1,c_v4)  
         H2,r2 = con_symmetry(X,c_v2,c_v3,c_v4)  
@@ -526,9 +537,9 @@ def con_Kite(is_transpose=False,is_diagGPC=False,is_diagSIR=False,is_rr=False,**
             if is_diagSIR:
                 "based on vertex star: |vb-v|=|vd-v|"
                 v,va,vb,vc,vd = mesh.rr_star_corner
-                if is_transpose:
-                    va,vb,vc,vd = vb,vc,vd,va
-                
+                if is_Kite_switch:
+                    va,vb,vc,vd = vb,vc,vd,va 
+                    
                 c_v = column3D(v,0,V)
                 #c_va = column3D(va,0,V)
                 c_vb = column3D(vb,0,V)
@@ -541,7 +552,7 @@ def con_Kite(is_transpose=False,is_diagGPC=False,is_diagSIR=False,is_rr=False,**
         
     return H*w,r*w
 
-def con_Kite_diagnet(is_transpose=False,**kwargs):
+def con_Kite_diagnet(is_Kite_switch=False,**kwargs): ##no use, merged into con_Kite(is_diagnet=True)
     """
     Kite-diagnet: based on each vertex star, two pairs of equal diagonal lengths
 
@@ -553,7 +564,7 @@ def con_Kite_diagnet(is_transpose=False,**kwargs):
     Kite_diagnet: |va-v|=|vd-v|, |vb-v|=|vc-v| & 
     (more stronger, but include boundary faces) |v1-v2|=|v1-v4|, |v2-v3|=|v4-v3|
     
-    is_transpose: |va-v|=|vb-v|, |vc-v|=|vd-v| & |v2-v1|=|v2-v3|, |v4-v1|=|v4-v3|
+    is_Kite_switch: |va-v|=|vb-v|, |vc-v|=|vd-v| & |v2-v1|=|v2-v3|, |v4-v1|=|v4-v3|
     """
     w = kwargs.get('Kite_diagnet')
     mesh = kwargs.get('mesh')
@@ -566,7 +577,7 @@ def con_Kite_diagnet(is_transpose=False,**kwargs):
     c_vb = column3D(vb,0,V)
     c_vc = column3D(vc,0,V)
     c_vd = column3D(vd,0,V)
-    if is_transpose:
+    if is_Kite_switch:
         H1,r1 = con_symmetry(X,c_va,c_v,c_vb)  
         H2,r2 = con_symmetry(X,c_vc,c_v,c_vd)  
     else:
@@ -581,7 +592,7 @@ def con_Kite_diagnet(is_transpose=False,**kwargs):
         c_v2 = column3D(v2,0,V)
         c_v3 = column3D(v3,0,V)
         c_v4 = column3D(v4,0,V)
-        if is_transpose:
+        if is_Kite_switch:
             H1,r1 = con_symmetry(X,c_v1,c_v2,c_v3)  
             H2,r2 = con_symmetry(X,c_v1,c_v4,c_v3)  
         else:

@@ -138,6 +138,7 @@ class DOINet(GeolabComponent):
     
     switch_GO_or_OG = Bool(True,label='_GO|OG_')  ## need to choose when window opens; choose geodesic-isoline direction
     switch_diag_or_ctrl = Bool(False,label='_Diag|Ctrl_') ## need to choose when window opens; choose on diagonal net or control net
+    switch_kite_1_or_2 = Bool(label='_Kite1|2_')## switch between "|va-v|=|vd-v|.." or "|va-v|=|vc-v|.."
     
     DOI_net = Bool(label='DOI')
     is_DOI_SIR = Bool(label='is_DOI-SIR')
@@ -147,6 +148,7 @@ class DOINet(GeolabComponent):
     Kite_net = Bool(label='Kite')
     is_Kite_diagGPC = Bool(label='is_Kite-GPC')
     is_Kite_diagGPC_SIR = Bool(label='is_Kite-GPC-SIR')
+    
 
     button_align_Kite = Button(label='A-Kite')
     button_align_CGC = Button(label='A-CGC')
@@ -177,7 +179,7 @@ class DOINet(GeolabComponent):
     #pseudogeo_rectify_dvlp = Bool(label='Develop')
     #pseudogeo_allSameAngle = Bool(label='uniqAngle')##default is True
     is_assigned_angle = Bool(label='Assigned')
-    assigned_angle = Float(90)## const.angle of <normal,tangentplane>
+    assigned_angle = Float(60)## if is_assigned_angle=True, const.angle of <normal,tangentplane>
     
 
     #--------------Plotting: -----------------------------
@@ -238,7 +240,7 @@ class DOINet(GeolabComponent):
     #---------------------------------------------------------
     Group(## 1st-panel
         VGroup(
-              HGroup('switch_GO_or_OG', 'switch_diag_or_ctrl',
+              HGroup('switch_GO_or_OG', 'switch_diag_or_ctrl','switch_kite_1_or_2',
                      'oscu_rrv_tangent',
                      'orient_rrv_normal',
                      ),    
@@ -1032,6 +1034,7 @@ class DOINet(GeolabComponent):
     def set_Pnet(self): 
         if self.Pseudogeodesic_net:
             self.orient_rrv_normal = True
+            self.is_assigned_angle = True ##when it's true, the initial optimization won't explode up. so better turn it on alwayss
             #self.pseudogeo_orient = True  
             #self.pseudogeo_allSameAngle = True ##default is True
         else:
@@ -1466,7 +1469,7 @@ class DOINet(GeolabComponent):
                     width,self.switch_diag_or_ctrl,self.is_central_strip)
             elif self.show_Pnet_rectifystrip:
                 sm1,list1,sm2,list2 = self.optimizer.pseudogeodesic_rectifying_srf(
-                    width,self.switch_diag_or_ctrl,self.is_central_strip)
+                    width,None,self.switch_diag_or_ctrl,self.is_central_strip)
             else:
                 print('!!!--Need to choose CGCstrip, CNCstrip or Pstrip!!!')
                 sys.exit()            
@@ -1619,6 +1622,7 @@ class DOINet(GeolabComponent):
         
         self.optimizer.is_GO_or_OG = self.switch_GO_or_OG 
         self.optimizer.is_diag_or_ctrl = self.switch_diag_or_ctrl
+        self.optimizer.is_Kite_switch = self.switch_kite_1_or_2
 
     # -------------------------------------------------------------------------
     #                         Reset + Optimization
