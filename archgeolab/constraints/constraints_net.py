@@ -664,35 +664,41 @@ def con_CGC(is_diagnet=False,is_rrvstar=True,**kwargs):
     return H*w,r*w
 
 
-def con_Gnet(is_rrvstar=True,**kwargs):
+def con_Gnet(is_diagnet=False,is_rrvstar=True,**kwargs):
     """
     Gnet: based on con_unit_edge(diag=False)
     Gnet_diagnet: based on con_unit_edge(diag=True)
     e1*e2-e3*e4=0; e2*e3-e1*e4=0
     """
-    def _con_gnet(X,w,c_ue1,c_ue2,c_ue3,c_ue4):
+    def _con_gnet(X,c_ue1,c_ue2,c_ue3,c_ue4):
         H1,r1 = con_equal_opposite_angle(X,c_ue1,c_ue2,c_ue3,c_ue4)
         H2,r2 = con_equal_opposite_angle(X,c_ue2,c_ue3,c_ue4,c_ue1)
         H, r = sparse.vstack((H1, H2)), np.r_[r1,r2]
-        return H*w, r*w
+        return H,r
     
     w = kwargs.get('Gnet')
     mesh = kwargs.get('mesh')
     X = kwargs.get('X')
     N5 = kwargs.get('N5')
     
-    if is_rrvstar:
-        "function same as below:con_gnet_diagnet"
-        num=mesh.num_rrv4f4
+    if is_diagnet:
+        "based on con_unit_edge(diag=True); X += [ni]; ni * (vij - vi) = 0"
+        v,_,_,_,_ = mesh.rr_star_corner
+        num = len(v)
     else:
-        num = mesh.num_regular
+        if is_rrvstar:
+            "function same as below:con_gnet_diagnet"
+            num=mesh.num_rrv4f4
+        else:
+            num = mesh.num_regular
+            
     arr = np.arange(num)
     c_ue1 = column3D(arr,N5-12*num,num)
     c_ue2 = column3D(arr,N5-9*num,num)
     c_ue3 = column3D(arr,N5-6*num,num)
-    c_ue4 = column3D(arr,N5-3*num,num)     
-    H,r = _con_gnet(X,w,c_ue1,c_ue2,c_ue3,c_ue4)
-    return H,r
+    c_ue4 = column3D(arr,N5-3*num,num)    
+    H,r = _con_gnet(X,c_ue1,c_ue2,c_ue3,c_ue4)
+    return H*w,r*w
 
 
     #--------------------------------------------------------------------------

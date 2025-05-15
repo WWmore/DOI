@@ -231,7 +231,7 @@ class GP_DOINet(GuidedProjectionBase):
             N += 3*F
             N1 = N2 = N3 = N4 = N
 
-        if self.unit_edge_vec: #for Gnet, AGnet; but not for CGC
+        if self.unit_edge_vec or self.get_weight('Gnet'): #for Gnet, AGnet; but not for CGC
             "X+=[le1,le2,le3,le4,ue1,ue2,ue3,ue4]"
             "for Anet, AGnet, DGPC"
             N += 16*num_rrstar
@@ -371,7 +371,7 @@ class GP_DOINet(GuidedProjectionBase):
             normals = self.mesh.face_normals()
             X = np.hstack((X, normals.flatten('F')))
             
-        if self.unit_edge_vec:
+        if self.unit_edge_vec or self.get_weight('Gnet'):
             _,l1,l2,l3,l4,E1,E2,E3,E4 = self.mesh.get_v4_unit_edge(self.is_diag_or_ctrl)
             X = np.r_[X,l1,l2,l3,l4]
             X = np.r_[X,E1.flatten('F'),E2.flatten('F'),E3.flatten('F'),E4.flatten('F')]
@@ -534,12 +534,12 @@ class GP_DOINet(GuidedProjectionBase):
             
         ###------- net construction: ------------------------------------------
 
-        if self.unit_edge_vec: 
+        if self.unit_edge_vec or self.get_weight('Gnet'): 
             H,r = con_unit_edge(self.is_diag_or_ctrl,**self.weights)
             self.add_iterative_constraint(H, r, 'unit_edge')
 
         if self.get_weight('Gnet'):
-            H,r = con_Gnet(**self.weights)
+            H,r = con_Gnet(self.is_diag_or_ctrl,**self.weights)
             self.add_iterative_constraint(H, r, 'Gnet')   
             
         if self.oscu_rrv_tangent:
@@ -793,7 +793,8 @@ class GP_DOINet(GuidedProjectionBase):
 
 
     def get_CGC_circular_strip(self,width,is_diagnet=False,
-                               is_centerline=False,is_smooth=False):
+                               is_centerline=False,is_smooth=False,
+                               is_even_selection=False):
         v = self.mesh.ver_rrv4f4
         an = self.mesh.vertices[v]
         if self.is_initial: 
@@ -826,12 +827,13 @@ class GP_DOINet(GuidedProjectionBase):
             ind1,ind2 = self.mesh.all_rr_polylines_v_vstar_order
             arr1,arr2 = self.mesh.all_rr_polylines_vnum_arr
     
-        sm1 = get_strip_from_rulings(an1[ind1],T1[ind1],arr1,is_smooth)
-        sm2 = get_strip_from_rulings(an2[ind2],T2[ind2],arr2,is_smooth)
+        sm1 = get_strip_from_rulings(an1[ind1],T1[ind1],arr1,is_smooth,is_even_selection)
+        sm2 = get_strip_from_rulings(an2[ind2],T2[ind2],arr2,is_smooth,is_even_selection)
         return sm1,arr1,sm2,arr2
 
     def get_CNC_circular_strip(self,width,is_diagnet=False,
-                               is_centerline=False,is_smooth=False):
+                               is_centerline=False,is_smooth=False,
+                               is_even_selection=False):
         v = self.mesh.ver_rrv4f4
         an = self.mesh.vertices[v]     
         if self.is_initial: 
@@ -866,8 +868,8 @@ class GP_DOINet(GuidedProjectionBase):
             ind1,ind2 = self.mesh.all_rr_polylines_v_vstar_order
             arr1,arr2 = self.mesh.all_rr_polylines_vnum_arr
             
-        sm1 = get_strip_from_rulings(an1[ind1],N[ind1],arr1,is_smooth)
-        sm2 = get_strip_from_rulings(an2[ind2],N[ind2],arr2,is_smooth)
+        sm1 = get_strip_from_rulings(an1[ind1],N[ind1],arr1,is_smooth,is_even_selection)
+        sm2 = get_strip_from_rulings(an2[ind2],N[ind2],arr2,is_smooth,is_even_selection)
         return sm1,arr1,sm2,arr2        
 
     def get_snet(self,is_r,is_diagnet=False,is_orient=True):
@@ -1109,7 +1111,8 @@ class GP_DOINet(GuidedProjectionBase):
         
     def pseudogeodesic_rectifying_srf(self,width,all_on=None,is_diagnet=False,
                                       is_centerline=False,
-                                      is_smooth=False):
+                                      is_smooth=False,
+                                      is_even_selection=False):
         if all_on is not None:
             if is_centerline:
                 "strip's centerline pass through the polyline"
@@ -1149,8 +1152,8 @@ class GP_DOINet(GuidedProjectionBase):
                 ind1,ind2 = self.mesh.all_rr_polylines_v_vstar_order
                 arr1,arr2 = self.mesh.all_rr_polylines_vnum_arr
     
-            sm1 = get_strip_from_rulings(an1[ind1],n1[ind1],arr1,is_smooth)
-            sm2 = get_strip_from_rulings(an2[ind2],n2[ind2],arr2,is_smooth)
+            sm1 = get_strip_from_rulings(an1[ind1],n1[ind1],arr1,is_smooth,is_even_selection)
+            sm2 = get_strip_from_rulings(an2[ind2],n2[ind2],arr2,is_smooth,is_even_selection)
             return sm1,arr1,sm2,arr2
 
     

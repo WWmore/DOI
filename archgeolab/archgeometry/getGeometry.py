@@ -53,11 +53,14 @@ def get_barycenters_mesh(mesh,verlist=None):
     new.make_mesh(verlist,flist)
     return new
 
-def get_strip_from_rulings(an,ruling,row_list,is_smooth,is_fix=False):
+def get_strip_from_rulings(an,ruling,row_list,is_smooth,is_even_selection=False,is_fix=False):
     "AG-NET: rectifying(tangent) planes along asymptotic(geodesic) crv."
     allV, allF = np.zeros(3), np.zeros(4,dtype=int)
     mmm = 0
     numv = 0
+
+    #m = len(row_list)
+    ck = 0
     for num in row_list:
         srr = mmm + np.arange(num)
         Pup = an[srr]+ruling[srr]
@@ -67,9 +70,17 @@ def get_strip_from_rulings(an,ruling,row_list,is_smooth,is_fix=False):
         arr1 = numv + np.arange(num)
         arr2 = arr1 + num
         flist = np.c_[arr1[:-1],arr1[1:],arr2[1:],arr2[:-1]]
-        allV, allF = np.vstack((allV,P1234)), np.vstack((allF,flist))
+        
+        if is_even_selection:
+            if ck %2 == 0:
+            #if ck < m/2:
+                allV, allF = np.vstack((allV,P1234)), np.vstack((allF,flist))
+        else:
+            allV, allF = np.vstack((allV,P1234)), np.vstack((allF,flist))
+            
         numv = len(allV)-1
         mmm += num
+        ck += 1
     sm = Mesh()
     sm.make_mesh(allV[1:],allF[1:])    
     return sm
