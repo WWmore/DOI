@@ -43,7 +43,7 @@ if __name__ == '__main__':
     file = rot +r'/chebyshev_sphere_cut3.obj'
     
     file =r'/Users/wanghui/Desktop/geometrylab7/obj_PQ/evolute_ex8.obj'
-    file =r'/Users/wanghui/Desktop/geometrylab7/obj_rotation/undoloid2_cut2.obj'
+    file =r'/Users/wanghui/Desktop/geometrylab7/obj_rotation/undoloid2_cut2_remesh.obj'
     #----------------------------------------
 
     '''Instantiate the sample component'''

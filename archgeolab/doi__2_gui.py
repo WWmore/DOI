@@ -139,6 +139,7 @@ class DOINet(GeolabComponent):
     switch_GO_or_OG = Bool(True,label='_GO|OG_')  ## need to choose when window opens; choose geodesic-isoline direction
     switch_diag_or_ctrl = Bool(False,label='_Diag|Ctrl_') ## need to choose when window opens; choose on diagonal net or control net
     switch_kite_1_or_2 = Bool(label='_Kite1|2_')## switch between "|va-v|=|vd-v|.." or "|va-v|=|vc-v|.."
+    switch_even_or_all = Bool(label='_even|all_')
     
     DOI_net = Bool(label='DOI')
     is_DOI_SIR = Bool(label='is_DOI-SIR')
@@ -304,7 +305,7 @@ class DOINet(GeolabComponent):
               ##Pnet
               VGroup(
                   HGroup('switch_1st_or_2nd','is_both',
-                         'show_isoline',),
+                         'show_isoline','switch_even_or_all'),
                   HGroup('is_orient_tangent',
                          'is_orient_normal',
                          'is_remedied_BiN',
@@ -1404,17 +1405,20 @@ class DOINet(GeolabComponent):
             
             if self.show_CGC_strip:
                 sm1,_,sm2,_ = self.optimizer.get_CGC_circular_strip(
-                    width,self.switch_diag_or_ctrl,self.is_central_strip)
+                    width,self.switch_diag_or_ctrl,self.is_central_strip,
+                    is_even_selection=self.switch_even_or_all)
             elif self.show_CNC_strip:
                 sm1,_,sm2,_ = self.optimizer.get_CNC_circular_strip(
-                    width,self.switch_diag_or_ctrl,self.is_central_strip)
+                    width,self.switch_diag_or_ctrl,self.is_central_strip,
+                    is_even_selection=self.switch_even_or_all)
             elif self.show_Pnet_rectifystrip:
                 #if self.read_vertex_normal:
                     #biN =self.anvn[1]
                 #else:
                 biN = None
                 sm1,_,sm2,_ = self.optimizer.pseudogeodesic_rectifying_srf(
-                    width,biN,self.switch_diag_or_ctrl,self.is_central_strip)
+                    width,biN,self.switch_diag_or_ctrl,self.is_central_strip,
+                    is_even_selection=self.switch_even_or_all)
 
             
             if self.is_both:
@@ -1463,13 +1467,16 @@ class DOINet(GeolabComponent):
 
             if self.show_CGC_strip:
                 sm1,list1,sm2,list2 = self.optimizer.get_CGC_circular_strip(
-                    width,self.switch_diag_or_ctrl,self.is_central_strip)
+                    width,self.switch_diag_or_ctrl,self.is_central_strip,
+                    is_even_selection=self.switch_even_or_all)
             elif self.show_CNC_strip:
                 sm1,list1,sm2,list2 = self.optimizer.get_CNC_circular_strip(
-                    width,self.switch_diag_or_ctrl,self.is_central_strip)
+                    width,self.switch_diag_or_ctrl,self.is_central_strip,
+                    is_even_selection=self.switch_even_or_all)
             elif self.show_Pnet_rectifystrip:
                 sm1,list1,sm2,list2 = self.optimizer.pseudogeodesic_rectifying_srf(
-                    width,None,self.switch_diag_or_ctrl,self.is_central_strip)
+                    width,None,self.switch_diag_or_ctrl,self.is_central_strip,
+                    is_even_selection=self.switch_even_or_all)
             else:
                 print('!!!--Need to choose CGCstrip, CNCstrip or Pstrip!!!')
                 sys.exit()            
