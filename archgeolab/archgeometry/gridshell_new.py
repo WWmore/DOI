@@ -184,7 +184,7 @@ class GridshellNew(MMesh):  # Hui
             self._fixed_vertices = 'constrained'
         elif vertex_indices == 'boundary':
             self._fixed_vertices = 'boundary'
-        elif vertex_indices == None:
+        elif vertex_indices is None:
             self._fixed_vertices = None
         else:
             self.__fixed_vertices = vertex_indices
@@ -1483,7 +1483,7 @@ class GridshellNew(MMesh):  # Hui
         return X
 
     def vertex_data_smoothing_matrix(self, offset=0, N=None, w=0.1):
-        if N == None:
+        if N is None:
             N = self.V
         v, vj, l = self.vertex_ring_vertices_iterators(return_lengths=True)
         i = np.hstack((v, np.arange(self.V)))
