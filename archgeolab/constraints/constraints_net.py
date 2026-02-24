@@ -387,24 +387,24 @@ def con_DOI__freeform(is_GO_or_OG=True,is_SIR=False,
         r = np.r_[r, r1, r2]   
     return H*w,r*w
 
-def con_GOnet(is_rrvstar=False,is_direction24=False,**kwargs):
+def con_GOnet(is_GO_or_OG=True,is_rrvstar=True,**kwargs):
     """ paper: <Discrete GEODESIC PARALLEL COORDINATES>-SIGGRAPH ASIA 2019
     based on con_unit_edge() & con_1geodesic
     orthogonal: (e1-e3)*(e2-e4) = 0
     tangents := e1-e3, e2-e4
     normal := t1 x t2
-    if direction: 
+    if is_GO_or_OG=True: 
         geodesic: e1*e2-e1*e4=0;  e2*e3-e3*e4=0; 
     else:
         geodesic: e1*e2-e2*e3=0;  e3*e4-e4*e1=0;
     """
-    w = kwargs.get('GOnet')
+    w = kwargs.get('DGPC')
     mesh = kwargs.get('mesh')
     X = kwargs.get('X')
     N = kwargs.get('N')
     N5 = kwargs.get('N5')
     
-    if is_rrvstar:
+    if is_rrvstar: ##True 
         num=mesh.num_rrv4f4
     else:
         num = mesh.num_regular
@@ -415,7 +415,7 @@ def con_GOnet(is_rrvstar=False,is_direction24=False,**kwargs):
     c_ue3 = column3D(arr,N5-6*num,num)
     c_ue4 = column3D(arr,N5-3*num,num) 
   
-    if is_direction24:
+    if is_GO_or_OG:
         H1,r1 = con_equal_opposite_angle(X,c_ue1,c_ue2,c_ue2,c_ue3)
         H2,r2 = con_equal_opposite_angle(X,c_ue3,c_ue4,c_ue4,c_ue1)
     else:

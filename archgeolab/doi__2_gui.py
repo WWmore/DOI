@@ -245,7 +245,7 @@ class DOINet(GeolabComponent):
                      'oscu_rrv_tangent',
                      'orient_rrv_normal',
                      ),    
-              #HGroup('orthogonal','GPC_net'),
+              HGroup('orthogonal','GPC_net'),
               
               VGroup(
                       HGroup('DOI_net','is_DOI_SIR','is_DOI_SIR_diagKite'),
@@ -645,14 +645,14 @@ class DOINet(GeolabComponent):
     @on_trait_change('fair001')
     def set_fairness_001(self):
         self.mesh_fairness = self.boundary_fairness = 0.005
-        self.corner_fairness = 0.008
-        self.tangential_fairness = self.spring_fairness = 0.0001
+        self.corner_fairness = 0.000
+        self.tangential_fairness = self.spring_fairness = 0.0000
         self.fairness_diagmesh = 0.005
     @on_trait_change('fair0001')
     def set_fairness_0001(self):
         self.mesh_fairness = self.boundary_fairness = 0.0005
-        self.corner_fairness = 0.0008
-        self.tangential_fairness = self.spring_fairness = 0.0001
+        self.corner_fairness = 0.0000
+        self.tangential_fairness = self.spring_fairness = 0.0000
         self.fairness_diagmesh = 0.0005
     @on_trait_change('fair0')
     def set_fairness_0(self):
@@ -1604,6 +1604,7 @@ class DOINet(GeolabComponent):
         self.optimizer.orient_rrv_normal = self.orient_rrv_normal
         
         self.optimizer.set_weight('orthogonal',  self.orthogonal*1)
+        self.optimizer.set_weight('DGPC', self.GPC_net)
         
         self.optimizer.set_weight('DOI', self.DOI_net)
         self.optimizer.is_DOI_SIR = self.is_DOI_SIR

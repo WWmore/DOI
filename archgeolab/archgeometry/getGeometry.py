@@ -87,7 +87,10 @@ def get_strip_from_rulings(an,ruling,row_list,is_smooth,is_even_selection=False,
 
 #---------------------------------------------------------------------------
 from scipy import sparse
-from pypardiso import spsolve
+try:
+    from pypardiso import spsolve
+except:
+    from scipy.sparse.linalg import spsolve
 
 def con_fair_midpoint0(c_v,c_vl,c_vr,N,return_s=False):
     "vl+vr-2v = 0"

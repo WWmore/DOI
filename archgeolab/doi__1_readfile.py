@@ -44,6 +44,9 @@ if __name__ == '__main__':
     
     file =r'/Users/wanghui/Desktop/geometrylab7/obj_PQ/evolute_ex8.obj'
     file =r'/Users/wanghui/Desktop/geometrylab7/obj_rotation/undoloid2_cut2_remesh.obj'
+    
+    file = r'/Users/wanghui/Desktop/arvin/patch_all__clean_init.obj'
+    reffile = r'/Users/wanghui/Desktop/arvin/patch_all__clean.obj'
     #----------------------------------------
 
     '''Instantiate the sample component'''
@@ -61,7 +64,7 @@ if __name__ == '__main__':
     GUI.open_obj_file(file)
     
     '''Open another obj file'''
-    #GUI.open_obj_file(reffile)
+    GUI.open_obj_file(reffile)
     
     '''Start geolab main loop'''
     GUI.start()

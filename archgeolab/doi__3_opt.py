@@ -20,7 +20,7 @@ from archgeolab.constraints.constraints_basic import con_planarity_constraints
 from archgeolab.constraints.constraints_fairness import con_fairness_4th_different_polylines
 
 from archgeolab.constraints.constraints_net import con_unit_edge,con_orient_rr_vn,\
-    con_osculating_tangents,con_Gnet,con_CGC,\
+    con_osculating_tangents,con_GOnet,con_Gnet,con_CGC,\
     con_orthogonal_midline,con_Anet,con_Snet,con_DOI,con_DOI__freeform,\
     con_Kite,con_Pnet
     
@@ -66,22 +66,24 @@ class GP_DOINet(GuidedProjectionBase):
 
         weights = {
             
-        'fairness_4diff' :0,
-        'fairness_diag_4diff' :0,
+        'fairness_4diff' : 0,
+        'fairness_diag_4diff' : 0,
  
-        'boundary_glide' :0, #Hui in gpbase.py doesn't work, replace here.
-        'i_boundary_glide' :0,
-        'boundary_z0' :0,
+        'boundary_glide' : 0, #Hui in gpbase.py doesn't work, replace here.
+        'i_boundary_glide' : 0,
+        'boundary_z0' : 0,
         'sharp_corner' : 0,
         'z0' : 0,
 
         'planarity' : 0,
 
-        'orthogonal' :0,
+        'orthogonal' : 0,
         
-        'DOI' :0,
+        'DGPC' : 0,
         
-        'Kite' :0,
+        'DOI' : 0,
+        
+        'Kite' : 0,
         
         'CGC' :0,
         'Gnet' : 0,  
@@ -153,6 +155,8 @@ class GP_DOINet(GuidedProjectionBase):
                    self.get_weight('planarity'),
                    
                    self.get_weight('orthogonal'),
+                   
+                   self.get_weight('DGPC'),
  
                    self.get_weight('DOI'),
                    
@@ -231,7 +235,7 @@ class GP_DOINet(GuidedProjectionBase):
             N += 3*F
             N1 = N2 = N3 = N4 = N
 
-        if self.unit_edge_vec or self.get_weight('Gnet'): #for Gnet, AGnet; but not for CGC
+        if self.unit_edge_vec or self.get_weight('Gnet') or self.get_weight('DGPC'): #for Gnet, AGnet; but not for CGC
             "X+=[le1,le2,le3,le4,ue1,ue2,ue3,ue4]"
             "for Anet, AGnet, DGPC"
             N += 16*num_rrstar
@@ -371,7 +375,7 @@ class GP_DOINet(GuidedProjectionBase):
             normals = self.mesh.face_normals()
             X = np.hstack((X, normals.flatten('F')))
             
-        if self.unit_edge_vec or self.get_weight('Gnet'):
+        if self.unit_edge_vec or self.get_weight('Gnet') or self.get_weight('DGPC'):
             _,l1,l2,l3,l4,E1,E2,E3,E4 = self.mesh.get_v4_unit_edge(self.is_diag_or_ctrl)
             X = np.r_[X,l1,l2,l3,l4]
             X = np.r_[X,E1.flatten('F'),E2.flatten('F'),E3.flatten('F'),E4.flatten('F')]
@@ -534,7 +538,7 @@ class GP_DOINet(GuidedProjectionBase):
             
         ###------- net construction: ------------------------------------------
 
-        if self.unit_edge_vec or self.get_weight('Gnet'): 
+        if self.unit_edge_vec or self.get_weight('Gnet') or self.get_weight('DGPC'): 
             H,r = con_unit_edge(self.is_diag_or_ctrl,**self.weights)
             self.add_iterative_constraint(H, r, 'unit_edge')
 
@@ -555,7 +559,11 @@ class GP_DOINet(GuidedProjectionBase):
         if self.get_weight('orthogonal'):
             H,r = con_orthogonal_midline(**self.weights)
             self.add_iterative_constraint(H, r, 'orthogonal')
-        
+
+        if self.get_weight('DGPC'):
+            H,r = con_GOnet(self.is_GO_or_OG, **self.weights)
+            self.add_iterative_constraint(H, r, 'DGPC')
+            
         if self.get_weight('DOI'):
             if True:
                 H,r = con_DOI__freeform(self.is_GO_or_OG,

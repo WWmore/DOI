@@ -114,15 +114,19 @@ class MMesh(Mesh):
         if self._inner == []:
             self.nonsingular()
         return self._inner
+    # @property
+    # def corner(self):
+    #     #print(self._corner,type(self._corner))
+    #     #print(len(self._corner))
+    #     if len(self._corner)==0 or self._corner is None:
+    #         self.nonsingular()
+    #     #print(self._corner)
+    #     return self._corner
     @property
     def corner(self):
-        #print(self._corner,type(self._corner))
-        #print(len(self._corner))
-        if len(self._corner)==0 or self._corner is None:
+        if self._corner is None:
             self.nonsingular()
-        #print(self._corner)
-        return self._corner
-    
+        return self._corner    
     @property
     def ver_regular(self):
         if self._ver_regular is None:
