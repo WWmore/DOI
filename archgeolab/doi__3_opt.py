@@ -374,7 +374,8 @@ class GP_DOINet(GuidedProjectionBase):
             "X += [Nx,Ny,Nz]; len=3F"
             normals = self.mesh.face_normals()
             X = np.hstack((X, normals.flatten('F')))
-            
+        
+        ### Gnet, DGPC
         if self.unit_edge_vec or self.get_weight('Gnet') or self.get_weight('DGPC'):
             _,l1,l2,l3,l4,E1,E2,E3,E4 = self.mesh.get_v4_unit_edge(self.is_diag_or_ctrl)
             X = np.r_[X,l1,l2,l3,l4]

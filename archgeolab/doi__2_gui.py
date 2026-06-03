@@ -299,6 +299,15 @@ class DOINet(GeolabComponent):
                          'show_snet_center',
                          'show_snet_tangent',
                          'show_snet_normal',),
+                  
+                  HGroup(Item('interactive',
+                              tooltip='InteractiveOptimization',),
+                         Item('_'),
+                         Item('optimize',show_label=False),
+                         Item('reinitialize',show_label=False),
+                         'hide_face','hide_edge',
+                         show_border=False),  
+                  
               label='Point / Poly / Mesh',show_border=False),
             
               ###-------------------------------------
@@ -994,6 +1003,7 @@ class DOINet(GeolabComponent):
         self.Anet = False
         
         self.Pseudogeodesic_net = False
+        self.is_assigned_angle = False
 
 
 

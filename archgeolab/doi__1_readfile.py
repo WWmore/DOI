@@ -41,12 +41,13 @@ if __name__ == '__main__':
     file = rot +r'/conical1_diagKite.obj'
     #file = rot +r'/chebyshev_sphere.obj'
     file = rot +r'/chebyshev_sphere_cut3.obj'
+    file = rot +r'/rot_GH_pnet.obj'
     
-    file =r'/Users/wanghui/Desktop/geometrylab7/obj_PQ/evolute_ex8.obj'
-    file =r'/Users/wanghui/Desktop/geometrylab7/obj_rotation/undoloid2_cut2_remesh.obj'
+    #file = a +r'/richmond_polar4_sparse.obj'
     
-    file = r'/Users/wanghui/Desktop/arvin/patch_all__clean_init.obj'
-    reffile = r'/Users/wanghui/Desktop/arvin/patch_all__clean.obj'
+    #file =r'/Users/wanghui/Desktop/geometrylab7/obj_PQ/evolute_ex8.obj'
+    #file =r'/Users/wanghui/Desktop/geometrylab7/obj_rotation/undoloid2_cut2_remesh.obj'
+
     #----------------------------------------
 
     '''Instantiate the sample component'''
@@ -64,7 +65,7 @@ if __name__ == '__main__':
     GUI.open_obj_file(file)
     
     '''Open another obj file'''
-    GUI.open_obj_file(reffile)
+    #GUI.open_obj_file(reffile)
     
     '''Start geolab main loop'''
     GUI.start()

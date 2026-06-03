@@ -188,6 +188,17 @@ def con_orthogonal_midline(is_rr=True,**kwargs):
     H,r = con_equal_length(X,c_v1,c_v2,c_v3,c_v4)
     return H*w,r*w 
 
+def _orthogonal(mesh,X,V):
+    v1,v2,v3,v4 = mesh.rr_quadface.T # in odrder
+    if True:
+        ind = mesh.ind_rr_quadface_with_rrv
+        v1,v2,v3,v4 = v1[ind],v2[ind],v3[ind],v4[ind]
+    c_v1 = column3D(v1,0,V)
+    c_v2 = column3D(v2,0,V)
+    c_v3 = column3D(v3,0,V)
+    c_v4 = column3D(v4,0,V)
+    H,r = con_equal_length(X,c_v1,c_v2,c_v3,c_v4)
+    return H,r
 
     #--------------------------------------------------------------------------
     #           Geodesic parallel coordinates, SIR,  Kite:
@@ -219,18 +230,6 @@ def con_DOI(is_GO_or_OG=True,is_SIR=False,is_diagKite=False,**kwargs):
     X = kwargs.get('X')
     V = mesh.V
 
-    def _orthogonal():
-        v1,v2,v3,v4 = mesh.rr_quadface.T # in odrder
-        if True:
-            ind = mesh.ind_rr_quadface_with_rrv
-            v1,v2,v3,v4 = v1[ind],v2[ind],v3[ind],v4[ind]
-        c_v1 = column3D(v1,0,V)
-        c_v2 = column3D(v2,0,V)
-        c_v3 = column3D(v3,0,V)
-        c_v4 = column3D(v4,0,V)
-        H,r = con_equal_length(X,c_v1,c_v2,c_v3,c_v4)
-        return H,r
-    
     def _parallel():
         "regular patch / rotational patch"
         M = mesh.vMatrix if is_GO_or_OG else mesh.vMatrix.T
@@ -288,7 +287,7 @@ def con_DOI(is_GO_or_OG=True,is_SIR=False,is_diagKite=False,**kwargs):
             
         return H,r
     
-    H1,r1 = _orthogonal()
+    H1,r1 = _orthogonal(mesh,X,V)
     H2,r2 = _parallel()
             
     #print('ortho:', np.sum(np.square((H1*X)-r1)))
@@ -311,7 +310,7 @@ def con_DOI__freeform(is_GO_or_OG=True,is_SIR=False,
     V = mesh.V
     
     def con_general_chebyshev(rhombus=False,half1=False,half2=False,is_rr=False):
-        "each quadface, opposite edgelength equal"
+        "in each quadface, half of the opposite edgelengths are equal"
         v1,v2,v3,v4 = mesh.rr_quadface.T # in odrder
         
         if is_rr:
@@ -339,7 +338,7 @@ def con_DOI__freeform(is_GO_or_OG=True,is_SIR=False,
         return H,r
 
     def con_equal_polysegment(is_poly1_or_2=True):
-        "along one family of polylines, the segments are equal"
+        "along one family of polylines, the segments are equal; for SIR"
         v,v1,v2,v3,v4 = mesh.rrv4f4
         c_v = column3D(v,0,V)
         c_v1 = column3D(v1,0,V)
@@ -355,7 +354,10 @@ def con_DOI__freeform(is_GO_or_OG=True,is_SIR=False,
         H,r = con_symmetry(X,c_vl,c_v,c_vr)  
         return H,r
 
-    H,r = con_general_chebyshev(half1=is_GO_or_OG,half2= not is_GO_or_OG)
+    H1,r1 = _orthogonal(mesh,X,V)
+    H2,r2 = con_general_chebyshev(half1=is_GO_or_OG,half2= not is_GO_or_OG)
+    H = sparse.vstack((H1, H2))
+    r = np.r_[r1, r2]  
     
     if is_SIR:
         Hs,rs = con_equal_polysegment(is_GO_or_OG)
@@ -474,16 +476,16 @@ def con_Kite(is_diagnet=False,is_Kite_switch=False,
     is_diagSIR (based on is_diagGPC):
     + uniform non-symmetric-diagonal lengths along non-symmetric-diagonal polylines    
     
+    Kite-net vertex star (Hui: choose this one):
+           a   1    d
+           2   v    4
+           b   3    c  
+           
     Kite-net quad face: (Hui: need check orientaion)
             v1      v7
         v2     v4        v6
         
             v3      v5
-
-    Kite-net vertex star (Hui: choose this one):
-           a   1    d
-           2   v    4
-           b   3    c  
     """
     w = kwargs.get('Kite')
     mesh = kwargs.get('mesh')
