@@ -5,3 +5,7 @@
 *.ini
 archgeolab/constraints/__pycache__/constraints_glide.cpython-39.pyc
 *.pyc
+objs/helicoid_saintgilles_sparse.obj
+objs/knitcandela/knitcandela_33.obj
+objs/knitcandela/knitcandela_33_DGPC.obj
+/objs

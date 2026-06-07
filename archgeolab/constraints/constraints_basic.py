@@ -19,6 +19,7 @@ from constraints_basic import
     con_dependent_vector,con_equal_opposite_angle,con_constangle4,
     con_diagonal2,con_circle,
     con_constangle2,con_constangle3,con_positive,con_negative,con_orient1,con_orient2,
+    con_oriented_vectors
 """
 #    # con_unique_angle1,con_unique_angle3,con_const_angle_cos1,con_const_angle_sin1,
     # con_multiply,con_unit_decomposition
@@ -75,13 +76,27 @@ def con_unit(X,c_ud1,w=100):
     H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
     return H*w,r*w
 
+def con_equal(X,c_a,c_b):
+    "variable arrays a=b"
+    num = len(c_a)
+    row = np.tile(np.arange(num,dtype=int),2)
+    col = np.r_[c_a, c_b]
+    ones = np.ones(num,dtype=int)
+    data = np.r_[ones,-ones]
+    r = np.zeros(num)
+    H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
+    return H,r
+
 def con_constl(c_ld1,init_l1,N):
     "ld1 == const."
     num = len(c_ld1)
     row = np.arange(num,dtype=int)
     col = c_ld1
     data = np.ones(num,dtype=int)
-    r = init_l1
+    if len(init_l1)==num:
+        r = init_l1
+    else:
+        r = data * init_l1
     H = sparse.coo_matrix((data,(row,col)), shape=(num, N))
     return H,r
 
@@ -348,6 +363,20 @@ def con_dependent_vector(X,c_a,c_b,c_t):
     H = sparse.vstack((H12,H23,H13))
     r = np.r_[r12,r23,r13]
     return H,r
+
+def con_oriented_vectors(X,c_v0,c_v2,c_v4,c_cg,c_pos):
+    "along the curve, all (Cg-V0)*(V4-v2)=pos^2>0, to preserve orientation"
+    num = int(len(c_v0)/3)
+    col = np.r_[c_v0,c_v2,c_v4,c_cg,c_pos]
+    row = np.tile(np.arange(num),13)
+    d1 = X[c_v4]-X[c_v2]
+    d2 = X[c_cg]-X[c_v0]
+    data = np.r_[-d1,-d2,d2,d1, -2*X[c_pos]]
+    H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
+    r = np.einsum('ij,ij->i',d1.reshape(-1,3, order='F'),d2.reshape(-1,3, order='F'))-X[c_pos]**2
+    return H,r
+    
+    
     # -------------------------------------------------------------------------
     #                          Geometric Constraints (from Davide)
     # -------------------------------------------------------------------------

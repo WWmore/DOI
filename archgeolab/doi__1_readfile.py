@@ -41,7 +41,7 @@ if __name__ == '__main__':
     file = rot +r'/conical1_diagKite.obj'
     #file = rot +r'/chebyshev_sphere.obj'
     file = rot +r'/chebyshev_sphere_cut3.obj'
-    file = rot +r'/rot_GH_pnet.obj'
+    file = rot +r'/rot_GH.obj'
     
     #file = a +r'/richmond_polar4_sparse.obj'
     

@@ -124,16 +124,21 @@ class GP_DOINet(GuidedProjectionBase):
         self.is_Kite_diagGPC_SIR = False
         self.is_Kite_switch = False ## switch between "|va-v|=|vd-v|.." or "|va-v|=|vc-v|.."
         
-        ##pseudogeodesic project:
+        ##CGC-net: 
+        self.is_uniq_rho = False
+        self.assigned_cgc_rho = 1
+        
+        ##CNC, Snet:
+        self.is_uniqradius = False
+        self.assigned_snet_radius = 0
+        
+        ##Pseudogeodesic-net:
         self.is_pseudogeo_allSameAngle = True ##default is changed to True
         self.is_assigned_angle = False ## if assigned a constant angle
         self.assigned_angle = None
 
         self.is_pseudogeo_rectify_dvlp = False ## no use
         self.data_pseudogeodesic_binormal = None #=[an,oN1,oN2,cos13,cos24]
-
-        self.if_uniqradius = False
-        self.assigned_snet_radius = 0
 
     #--------------------------------------------------------------------------
     #
@@ -218,7 +223,12 @@ class GP_DOINet(GuidedProjectionBase):
         F = self.mesh.F
         N = 3*V
         N1 = N2 = N3 = N4 = N5 = N
-        num_rrstar = self.mesh.num_rrv4f4 ##may have problem for only one strip
+        
+        if self.is_diag_or_ctrl:
+            v0,v1,v2,v3,v4 = self.mesh.rr_star_corner
+        else:
+            v0,v1,v2,v3,v4 = self.mesh.rrv4f4
+        num_rrstar = len(v0) ##self.mesh.num_rrv4f4
         
         Noscut = N
         Norient = N
@@ -241,10 +251,10 @@ class GP_DOINet(GuidedProjectionBase):
             N += 16*num_rrstar
             N5 = N
         
-        if self.oscu_rrv_tangent: #CGC
-            "X +=[ll1,ll2,ll3,ll4,lu1,lu2,u1,u2]"
-            N += 12*num_rrstar
-            Noscut = N  
+        # if self.oscu_rrv_tangent: #CGC, works but no use
+        #     "X +=[ll1,ll2,ll3,ll4,lu1,lu2,u1,u2]"
+        #     N += 12*num_rrstar
+        #     Noscut = N  
         
         if self.orient_rrv_normal: #CGC
             "X+=[vn, a], vN * Nv = a^2>=0; Nv is given orient-vertex-normal"
@@ -252,9 +262,13 @@ class GP_DOINet(GuidedProjectionBase):
             Norient = N
 
         if self.get_weight('CGC'):
-            "X += [Cg1,Cg2, rho_g]"
-            N += 6*num_rrstar + 1 #2*num_rrstar
+            "X += [Cg1,Cg2] + [rho1,rho2] + [pos1,pos2]"
+            N += 6*num_rrstar + 2*num_rrstar + 2*num_rrstar  ##replace 1 by 2*num
             Ncgc = N
+            if self.is_uniq_rho:
+                "X += [rho], rho is a constant"
+                N += 1
+                Ncgc = N
 
         if self.get_weight('Anet'):
             N += 3*num_rrstar
@@ -381,22 +395,27 @@ class GP_DOINet(GuidedProjectionBase):
             X = np.r_[X,l1,l2,l3,l4]
             X = np.r_[X,E1.flatten('F'),E2.flatten('F'),E3.flatten('F'),E4.flatten('F')]
         
-        ### CGC: 
-        if self.oscu_rrv_tangent:
-            "X +=[ll1,ll2,ll3,ll4,lu1,lu2,u1,u2]"
-            l,t,lt1,lt2 = self.mesh.get_net_osculating_tangents(self.is_diag_or_ctrl)
-            [ll1,ll2,ll3,ll4],[lt1,t1],[lt2,t2] = l,lt1,lt2
-            X = np.r_[X,ll1,ll2,ll3,ll4]
-            X = np.r_[X,lt1,lt2,t1.flatten('F'),t2.flatten('F')] 
+        # ### CGC: , works but no use
+        # if self.oscu_rrv_tangent:
+        #     "X +=[ll1,ll2,ll3,ll4,lu1,lu2,u1,u2]"
+        #     l,t,lt1,lt2 = self.mesh.get_net_osculating_tangents(self.is_diag_or_ctrl)
+        #     [ll1,ll2,ll3,ll4],[lt1,t1],[lt2,t2] = l,lt1,lt2
+        #     X = np.r_[X,ll1,ll2,ll3,ll4]
+        #     X = np.r_[X,lt1,lt2,t1.flatten('F'),t2.flatten('F')] 
 
         if self.orient_rrv_normal:
             _,vN,a = self.mesh.get_v4_orient_unit_normal(self.is_diag_or_ctrl)
             X = np.r_[X,vN.flatten('F'),a]     
             
         if self.get_weight('CGC'):
-            "X += [Cg1,Cg2, rho_g], Cg1 geodesic circle centers from isoline1, rho_g is 1/kappa_g"
-            Cg1, Cg2, rho = self.get_geodesic_curvature(self.is_diag_or_ctrl)
-            X = np.r_[X,Cg1.flatten('F'),Cg2.flatten('F'), rho]  
+            "X += [Cg1,Cg2] + [rho1,rho2] + [pos1,pos2]"
+            "Cg1 geodesic circle centers from isoline1, rho_g is 1/kappa_g"
+            Cg1, Cg2, rho, pos = self.get_geodesic_curvature(self.is_diag_or_ctrl)
+            X = np.r_[X,Cg1.flatten('F'),Cg2.flatten('F'), rho, pos]  
+            
+            if self.is_uniq_rho:
+                "X += [rho], rho is a constant"
+                X = np.r_[X, np.mean(rho)]
             
         ### CNC:
         if self.get_weight('Anet'):
@@ -547,14 +566,14 @@ class GP_DOINet(GuidedProjectionBase):
             H,r = con_Gnet(self.is_diag_or_ctrl,**self.weights)
             self.add_iterative_constraint(H, r, 'Gnet')   
             
-        if self.oscu_rrv_tangent:
-            H,r = con_osculating_tangents(self.is_diag_or_ctrl,**self.weights)
-            self.add_iterative_constraint(H, r, 'oscu_rrv_tangent')
+        # if self.oscu_rrv_tangent: ##CGC, works but no use
+        #     H,r = con_osculating_tangents(self.is_diag_or_ctrl,**self.weights)
+        #     self.add_iterative_constraint(H, r, 'oscu_rrv_tangent')
         
         if self.orient_rrv_normal:
             "rr_vn orients samely as Nv"
-            is_oscut = True if self.oscu_rrv_tangent else False
-            H,r = con_orient_rr_vn(is_oscut, **self.weights)
+            #is_osculating_tangent = True if self.oscu_rrv_tangent else False ##works but no use
+            H,r = con_orient_rr_vn(False, **self.weights)
             self.add_iterative_constraint(H, r, 'orient_vn')
             
         if self.get_weight('orthogonal'):
@@ -588,7 +607,8 @@ class GP_DOINet(GuidedProjectionBase):
             #self.add_iterative_constraint(H, r, 'Kite_diagnet')
             
         if self.get_weight('CGC'):
-            H,r = con_CGC(self.is_diag_or_ctrl,**self.weights)
+            is_uniq_rho, rho = self.is_uniq_rho, self.assigned_cgc_rho
+            H,r = con_CGC(self.is_diag_or_ctrl,is_uniq_rho,rho, **self.weights)
             self.add_iterative_constraint(H, r, 'CGC')
             
         if self.get_weight('Anet'):
@@ -599,7 +619,7 @@ class GP_DOINet(GuidedProjectionBase):
             orientrn = self.mesh.new_vertex_normals()
             H,r = con_Snet(orientrn,
                            is_diagnet=self.is_diag_or_ctrl,
-                           is_uniqR=self.if_uniqradius,
+                           is_uniqR=self.is_uniqradius,
                            assigned_r=self.assigned_snet_radius,
                            **self.weights)
             self.add_iterative_constraint(H, r, 'Snet') 
@@ -778,27 +798,69 @@ class GP_DOINet(GuidedProjectionBase):
         
         eps = np.finfo(float).eps
         
-        def _get_center(v0,v1,v3):
+        def _get_center(v0,v1,v3): ##has problem, use below
             _,O1,r1 = circle_three_points(V[v1],V[v0],V[v3], center=True)
-
+            #radius = np.linalg.norm(O1-V[v0],axis=1)
+            #print('rho_err=:', '%.3f' % np.min(radius-r1), '%.3f'%np.max(radius-r1))
+            
             kd1 = (O1-V[v0]) / (r1[:,None]+eps) ##unit curvature vector
-            T1 = np.cross(vN,np.cross(kd1,vN+eps)) ##note: if geodesic, then O1-V[v0] // vN
-            T1 = T1 / (np.linalg.norm(T1,axis=1)[:,None]+eps)
+            T1 = np.cross(vN,np.cross(kd1,vN)) ##note: if geodesic, then O1-V[v0] // vN
+            T1 = T1 / np.linalg.norm(T1,axis=1)[:,None]
 
             cos1 = np.einsum('ij,ij->i', kd1, T1)
-            rho1 = r1 / (cos1+eps) 
+            rho1 = r1 / cos1
             Cg1 = V[v0] + T1 * rho1[:,None]
             return Cg1, rho1
+        
+        def _get_center2(v0,v1,v3):
+            cN = np.cross(V[v1]-V[v0],V[v3]-V[v0]) ##normal of osculating pln
+            cN = cN / np.linalg.norm(cN,axis=1)[:,None]
+            cos = np.abs(np.einsum('ij,ij->i', vN, cN)) ##np.abs works for orientation
             
-        Cg1,rho1 = _get_center(v0, v1, v3)
-        Cg2,rho2 = _get_center(v0, v2, v4)
+            T = np.cross(vN,np.cross(cN,vN))  ##vector of Cg-V0
+            T = T / np.linalg.norm(T,axis=1)[:,None]
+            
+            _,O,r = circle_three_points(V[v1],V[v0],V[v3], center=True)
+
+            rho = r / cos ## > 0
+            
+            "oriented vector T//Cg-V0, has acute angle between O-V0"
+            ck = np.einsum('ij,ij->i', T, O-V[v0])
+            neg = np.where(ck<0)[0]
+            T[neg] = -T[neg]
+            
+            Cg = V[v0] + T * rho[:,None]
+            return Cg, rho
+            
+        Cg1,rho1 = _get_center2(v0, v1, v3) ##for rotational srf, rho1==rho2
+        Cg2,rho2 = _get_center2(v0, v2, v4)
         
         print('rho1[min,max]=',np.min(rho1), np.max(rho1))
         print('rho2[min,max]=',np.min(rho2), np.max(rho2))
         
-        rho = np.mean(np.r_[rho1,rho2])
+        err = rho1-rho2
+        print('rho_err=:', '%.3f' % np.min(err), '%.3f'%np.max(err))
+
+        #rho = np.mean(np.r_[rho1,rho2])
+        rho = np.r_[rho1, rho2]
         
-        return Cg1, Cg2, rho #rho1,rho2 ##used for checking
+        dot1 = np.einsum('ij,ij->i', Cg1-V[v0], V[v4]-V[v2])
+        ind1 = np.where(dot1<0)[0]
+        print("(Cg1-V[v0])*(V[v4]-V[v2]) > 0", len(ind1),len(dot1)/2)
+            
+        dot2 = np.einsum('ij,ij->i', Cg2-V[v0], V[v3]-V[v1])
+        ind2 = np.where(dot2<0)[0]
+        print("(Cg2-V[v0])*(V[v3]-V[v1]) > 0", len(ind2),len(dot2)/2)
+            
+        if True:
+            "make sure the initial orientation"
+            Cg1[ind1] = 2*V[v0[ind1]]-Cg1[ind1]
+            Cg2[ind2] = 2*V[v0[ind2]]-Cg2[ind2]
+        
+        pos1 = np.sqrt(np.abs(dot1))
+        pos2 = np.sqrt(np.abs(dot2))
+        pos = np.r_[pos1, pos2]
+        return Cg1, Cg2, rho, pos
 
 
     def get_CGC_circular_strip(self,width,is_diagnet=False,
@@ -807,13 +869,28 @@ class GP_DOINet(GuidedProjectionBase):
         v = self.mesh.ver_rrv4f4
         an = self.mesh.vertices[v]
         if self.is_initial: 
-            Cg1, Cg2, rho = self.get_geodesic_curvature(is_diagnet)
+            Cg1, Cg2, rho, _ = self.get_geodesic_curvature(is_diagnet)
         else:
             num = len(v)
-            c_cg1 = self._Ncgc - 6*num - 1 + np.arange(3*num)
+            
+            if self.is_uniq_rho:
+                "X += [Cg1,Cg2] + [rho1,rho2] + [pos1,pos2] + [rhog]"
+                Ncgc0 = self._Ncgc - 6*num - 2*num - 2*num - 1  ##replace 1 by 2num
+            else:
+                "X += [Cg1,Cg2] + [rho1,rho2] + [pos1,pos2]"
+                Ncgc0 = self._Ncgc - 6*num - 2*num - 2*num  ##replace 1 by 2num
+
+            c_cg1 = Ncgc0 + np.arange(3*num)
             c_cg2 = c_cg1 + 3*num
+
             Cg1 = self.X[c_cg1].reshape(-1,3,order='F')
             Cg2 = self.X[c_cg2].reshape(-1,3,order='F') 
+            
+            c_rho = Ncgc0 + 6*num + np.arange(2*num)
+            rho = self.X[c_rho]
+            
+        rho_min, rho_mean, rho_max = np.min(rho),np.mean(rho),np.max(rho)
+        print('rho[min,mean,max]=','%.3f'% rho_min,'%.3f'% rho_mean, '%.3f'% rho_max )
 
         T1, T2 = Cg1 - an, Cg2 - an
         eps = np.finfo(float).eps 

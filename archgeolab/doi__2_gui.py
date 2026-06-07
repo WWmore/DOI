@@ -158,12 +158,14 @@ class DOINet(GeolabComponent):
     
     CGC_net = Bool(label='CGC')
     Gnet = Bool(label='Gnet') 
+    is_uniq_rho = Bool(label='kg')
+    CGC_uniq_rho_assigned = Float(label='const.kg')
       
     CNC_net = Bool(label='CNC') ##Snet with const.r
     Snet = Bool(label='Snet')
     Snet_orient = Bool(True,label='Orient')
     Snet_constR = Bool(False,label='constR')
-    if_uniqR = Bool(False) 
+    is_uniqR = Bool(False) 
     Snet_constR_assigned = Float(label='const.R')
     button_CMC_mesh = Button(label='CMC')
     
@@ -242,7 +244,7 @@ class DOINet(GeolabComponent):
     Group(## 1st-panel
         VGroup(
               HGroup('switch_GO_or_OG', 'switch_diag_or_ctrl','switch_kite_1_or_2',
-                     'oscu_rrv_tangent',
+                     #'oscu_rrv_tangent',
                      'orient_rrv_normal',
                      ),    
               HGroup('orthogonal','GPC_net'),
@@ -253,12 +255,15 @@ class DOINet(GeolabComponent):
               show_border=True),
               
               VGroup(
-                      HGroup('CGC_net','Gnet',
+                      HGroup('CGC_net',
+                             'is_uniq_rho',
+                             Item('CGC_uniq_rho_assigned',show_label=False),
+                             'Gnet',
                              'CNC_net','Anet',),
                       # HGroup('Snet',
                       #        #'Snet_orient',
                       #        'Snet_constR',
-                      #        Item('if_uniqR',show_label=False),
+                      #        Item('is_uniqR',show_label=False),
                       #        'Snet_constR_assigned'),
                       HGroup('Pseudogeodesic_net',
                              'is_assigned_angle',
@@ -998,7 +1003,7 @@ class DOINet(GeolabComponent):
         self.CNC_net = False
         self.Snet = False
         self.Snet_constR = False
-        self.if_uniqR = False
+        self.is_uniqR = False
         
         self.Anet = False
         
@@ -1023,10 +1028,10 @@ class DOINet(GeolabComponent):
     @on_trait_change('CGC_net')
     def set_CGC_net(self): 
         if self.CGC_net:
-            self.oscu_rrv_tangent = True
+            #self.oscu_rrv_tangent = True   ##works but no use
             self.orient_rrv_normal = True
         else:
-            self.oscu_rrv_tangent = False
+            #self.oscu_rrv_tangent = False  ##works but no use
             self.orient_rrv_normal = False
             
     @on_trait_change('CNC_net')
@@ -1469,7 +1474,7 @@ class DOINet(GeolabComponent):
 
     @on_trait_change('show_isolinestrip_unroll')
     def plot_1st_or_2nd_rectifyingDevelopableSrf_unrolling(self):
-        from huilab.huimesh.unroll import unroll_multiple_strips
+        from archgeolab.archgeometry.unroll import unroll_multiple_strips
         dist = self.mesh.mean_edge_length() * 0.5#self.scale_dist_offset
         width = self.strip_width * dist
         name = 'ps-R2D'
@@ -1626,12 +1631,14 @@ class DOINet(GeolabComponent):
         
         self.optimizer.set_weight('Gnet', self.Gnet)
         self.optimizer.set_weight('CGC', self.CGC_net)
+        self.optimizer.is_uniq_rho = self.is_uniq_rho
+        self.optimizer.assigned_cgc_rho = self.CGC_uniq_rho_assigned
         
         self.optimizer.set_weight('Anet',  self.Anet)
         self.optimizer.set_weight('Snet', self.Snet)
         self.optimizer.set_weight('Snet_orient', self.Snet_orient)
         self.optimizer.set_weight('Snet_constR', self.Snet_constR)
-        self.optimizer.if_uniqradius = self.if_uniqR
+        self.optimizer.is_uniqradius = self.is_uniqR
         self.optimizer.assigned_snet_radius = self.Snet_constR_assigned
 
         self.optimizer.set_weight('Pnet', self.Pseudogeodesic_net)
@@ -1683,13 +1690,13 @@ class DOINet(GeolabComponent):
 
     @on_trait_change('optimize')
     def optimize_mesh(self):
-        import time
-        start_time = time.time()
+        #import time
+        #start_time = time.time()
         itera = self.itera_run
         self.meshmanager.iterate(self.optimization_step, itera) # note:iterations from gpbase.py
         self.meshmanager.update_plot()
         
-        print('time[s] per iteration:','%.3g s' %((time.time() - start_time)/itera))
+        #print('time[s] per iteration:','%.3g s' %((time.time() - start_time)/itera))
             
     @on_trait_change('interactive')
     def interactive_optimize_mesh(self):

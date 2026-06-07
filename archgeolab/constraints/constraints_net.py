@@ -15,7 +15,8 @@ from archgeolab.constraints.constraints_basic import column3D,con_edge,\
     con_planarity,con_unit_normal,con_diagonal,con_osculating_tangent,\
     con_equal_opposite_angle,con_dependent_vector,con_cross,\
     con_orient,con_ortho,con_circle,\
-    con_constangle2,con_constangle3,con_positive,con_orient2
+    con_constangle2,con_constangle3,con_positive,con_orient2,\
+    con_oriented_vectors,con_equal
     #con_orthogonal_2vectors,con_negative,con_diagonal2,con_orient1
     # con_unique_angle1,con_unique_angle3,con_const_angle_cos1,con_const_angle_sin1,\
     # con_multiply,con_unit_decomposition
@@ -128,7 +129,7 @@ def con_orient_rr_vn(is_osculating_tangent=False,**kwargs):
     Default: 
         vN *(e1-e3) = vN *(e2-e4) = 0; vN^2=1
         vN*Nv=a^2
-    elif is_osculating_tangent:
+    elif is_osculating_tangent: (Since only CGC uses it --> only SIR-net --> can use default normals)
         X += [vN,a]
         vN * t1 = vN * t2 = 0; vN^2=1  <==> vN = t1 x t2
         vN*Nv=a^2
@@ -145,7 +146,7 @@ def con_orient_rr_vn(is_osculating_tangent=False,**kwargs):
     c_n = arr3 + Norient-4*num
     c_a = arr + Norient-num
     
-    if is_osculating_tangent:
+    if is_osculating_tangent: ##works but no use
         s = kwargs.get('Noscut')- 12*num
         c_t1,c_t2 = s+6*num+arr3, s+9*num+arr3
         Hvn,rvn = con_cross(X,c_t1,c_t2,c_n)
@@ -608,9 +609,9 @@ def con_Kite_diagnet(is_Kite_switch=False,**kwargs): ##no use, merged into con_K
     #--------------------------------------------------------------------------
     #                      CGC / G-net:
     #--------------------------------------------------------------------------  
-def con_CGC(is_diagnet=False,is_rrvstar=True,**kwargs):
+def con_CGC(is_diagnet=False,is_uniq_rho=False,assigned_rho=None,**kwargs):
     """CGC_net: net curves of constant geodesic curvature, kg1=|kg2|=const.
-        X +=[Cg1, Cg2, rho_g], len(Cg1)=len(Cg2)=3*num_rrv4f4, len(rho_g)=1
+        X +=[Cg1, Cg2, rho_g], len(Cg1)=len(Cg2)=3*num_rrv4f4, len(rho_g)=num_rrv4f4 ##1
         for isoline v1-v-v3:
             orientVN * (Cg1-V) = 0, (rho_g)^2=(Cg1-V)^2=(Cg1-V1)^2=(Cg1-V3)^2
         for isoline v2-v-v4:
@@ -622,13 +623,10 @@ def con_CGC(is_diagnet=False,is_rrvstar=True,**kwargs):
     Ncgc = kwargs.get('Ncgc')
     V = mesh.V
     
-    if is_rrvstar:
-        if is_diagnet:
-            v0,v1,v2,v3,v4 = mesh.rr_star_corner
-        else:
-            v0,v1,v2,v3,v4 = mesh.rrv4f4
+    if is_diagnet:
+        v0,v1,v2,v3,v4 = mesh.rr_star_corner
     else:
-        v0,v1,v2,v3,v4 = mesh.rr_star.T
+        v0,v1,v2,v3,v4 = mesh.rrv4f4
         
     num = len(v0)
     c_v0 = column3D(v0,0,V)
@@ -637,32 +635,69 @@ def con_CGC(is_diagnet=False,is_rrvstar=True,**kwargs):
     c_v3 = column3D(v3,0,V)
     c_v4 = column3D(v4,0,V)
 
-    c_cg1 = Ncgc - 6*num - 1 + np.arange(3*num) ##Huicheck: change 1 to 2*num
+    if is_uniq_rho:
+        "X += [Cg1,Cg2] + [rho1,rho2] + [pos1,pos2] + [rhog]"
+        Ncgc0 = Ncgc - 6*num - 2*num - 2*num - 1  ##replace 1 by 2num
+    else:
+        "X += [Cg1,Cg2] + [rho1,rho2] + [pos1,pos2]"
+        Ncgc0 = Ncgc - 6*num - 2*num - 2*num  ##replace 1 by 2num
+        
+        
+    c_cg1 = Ncgc0 + np.arange(3*num)
     c_cg2 = c_cg1 + 3*num
-    c_rho = np.tile(Ncgc - 1, num)
-    #c_rho1 =  Ncgc - 2*num + np.arange(num)
-    #c_rho2 = c_rho1 + num
+
+    c_rho1 =  Ncgc0 + 6*num + np.arange(num)
+    c_rho2 = c_rho1 + num
+    c_rho = Ncgc0 + 6*num + np.arange(2*num)
+    #c_rho = np.tile(Ncgc - 1, num)
+    
+    c_pos1 = c_rho2 + num
+    c_pos2 = c_pos1 + num
     
     def _con_rho(c_v0,c_v1,c_v3,c_cg1,c_rho):
+        "(rho_g)^2=(Cg1-V)^2=(Cg1-V1)^2=(Cg1-V3)^2"
+        "Hui: constraint residual highly depends on the scale of the mesh"
         H0,r0 = con_circle(X,c_v0,c_cg1,c_rho)
         H1,r1 = con_circle(X,c_v1,c_cg1,c_rho)
         H3,r3 = con_circle(X,c_v3,c_cg1,c_rho)
         return sparse.vstack((H0, H1, H3)), np.r_[r0, r1, r3] 
     
-    H13,r13 = _con_rho(c_v0,c_v1,c_v3,c_cg1,c_rho)
-    H24,r24 = _con_rho(c_v0,c_v2,c_v4,c_cg2,c_rho)
-    #print('rho1:',np.sum(np.square(H13*X-r13)))
-    #print('rho2:',np.sum(np.square(H24*X-r24)))
+    H13,r13 = _con_rho(c_v0,c_v1,c_v3,c_cg1,c_rho1)
+    H24,r24 = _con_rho(c_v0,c_v2,c_v4,c_cg2,c_rho2)
+    # print('rho1:',np.sum(np.square(H13*X-r13)))
+    # print('rho2:',np.sum(np.square(H24*X-r24)))
     
     Norient = kwargs.get('Norient')
     c_n = Norient-4*num + np.arange(3*num)
     Hg1,rg1 = con_planarity(X,c_v0,c_cg1,c_n) ##center Cg1 lies in tangent pln.
-    Hg2,rg2 = con_planarity(X,c_v0,c_cg2,c_n) ##center Cg1 lies in tangent pln.
-    #print('g1:',np.sum(np.square(Hg1*X-rg1)))
-    #print('g2:',np.sum(np.square(Hg2*X-rg2)))
+    Hg2,rg2 = con_planarity(X,c_v0,c_cg2,c_n) ##center Cg2 lies in tangent pln.
+    # print('g1:',np.sum(np.square(Hg1*X-rg1)))
+    # print('g2:',np.sum(np.square(Hg2*X-rg2)))
     
     H = sparse.vstack((H13, H24, Hg1, Hg2))
     r = np.r_[r13, r24, rg1, rg2] 
+    
+    
+    "along the curve, all (Cg1-V0)*(V4-v2)=pos^2>0, to avoide rulings flips"
+    Ho1,ro1 = con_oriented_vectors(X,c_v0,c_v2,c_v4,c_cg1,c_pos1) ##c_v2, c_v4 or c_v4, c_v2
+    Ho2,ro2 = con_oriented_vectors(X,c_v0,c_v1,c_v3,c_cg2,c_pos2) ##c_v1, c_v3 or c_v3, c_v1
+    # print('o1:',np.sum(np.square(Ho1*X-ro1)))
+    # print('o2:',np.sum(np.square(Ho2*X-ro2)))
+    H = sparse.vstack((H, Ho1, Ho2))
+    r = np.r_[r, ro1, ro2] 
+    
+    if is_uniq_rho:
+        "all rhos are constant ==rho"
+        if assigned_rho:
+            H0,r0 = con_constl(c_rho, np.array([assigned_rho]), len(X))
+            H = sparse.vstack((H, H0))
+            r = np.r_[r,r0]
+            
+        else:
+            c_rhog = np.tile(Ncgc - 1, 2*num)
+            Hc,rc = con_equal(X, c_rho, c_rhog)
+            H = sparse.vstack((H, Hc))
+            r = np.r_[r, rc] 
     return H*w,r*w
 
 
