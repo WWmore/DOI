@@ -9,3 +9,8 @@ objs/helicoid_saintgilles_sparse.obj
 objs/knitcandela/knitcandela_33.obj
 objs/knitcandela/knitcandela_33_DGPC.obj
 /objs
+/objs/obj_rot
+/objs
+/objs/obj_rot
+*.obj
+*.obj

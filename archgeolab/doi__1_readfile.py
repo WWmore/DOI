@@ -41,7 +41,14 @@ if __name__ == '__main__':
     file = rot +r'/conical1_diagKite.obj'
     #file = rot +r'/chebyshev_sphere.obj'
     file = rot +r'/chebyshev_sphere_cut3.obj'
-    file = rot +r'/rot_GH.obj'
+    
+    
+    file = rot +r'/rot2_unitscale_cut_CNC.obj'
+    file = rot +r'/unduloid1_2cusps.obj'
+    #file = rot +r'/unduloid_cut_unitscale.obj'
+    
+    # file = rot +r'/pseudosphere_unitscale.obj'
+    # reffile = rot +r'/pseudosphere_unitscale_sub2.obj'
     
     #file = a +r'/richmond_polar4_sparse.obj'
     
@@ -65,7 +72,7 @@ if __name__ == '__main__':
     GUI.open_obj_file(file)
     
     '''Open another obj file'''
-    #GUI.open_obj_file(reffile)
+   # GUI.open_obj_file(reffile)
     
     '''Start geolab main loop'''
     GUI.start()

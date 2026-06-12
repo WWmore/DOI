@@ -103,12 +103,12 @@ def interpolate_sphere(V0,V1,V2,V3,V4):
         A, B, C, D, E = vector[0],vector[1],vector[2],vector[3],vector[4]
         delt = np.sqrt(np.abs(B*B+C*C+D*D-4*A*E))
         A,B,C,D,E = A/delt,B/delt,C/delt,D/delt,E/delt
+        if A < 0:
+            A,B,C,D,E = -A, -B, -C, -D, -E #Hui update
+        
+        coo = [A,B,C,D,E]
         cM = -1/(2*A) * np.array([B, C, D])
         r = np.abs((B*B+C*C+D*D-4*A*E)/(4*A*A))
-        if A < 0:
-            coo = [-A,-B,-C,-D,-E]
-        else:
-            coo = [A,B,C,D,E]
         return coo, cM, np.sqrt(r)
 
     coolist,clist,rlist = [],[],[]
@@ -122,9 +122,9 @@ def interpolate_sphere(V0,V1,V2,V3,V4):
     sphere_coeff = (coo.T).flatten()
     M = np.array(clist).reshape(-1,3)
     nx = 2*coo[:,0]*V0[:,0]+coo[:,1] #==2*A*Vx+B
-    ny = 2*coo[:,0]*V0[:,1]+coo[:,2] #==2*A*Vx+C
-    nz = 2*coo[:,0]*V0[:,2]+coo[:,3] #==2*A*Vx+D
-    sphere_n = -np.c_[nx,ny,nz]#.flatten() ##note the sign
+    ny = 2*coo[:,0]*V0[:,1]+coo[:,2] #==2*A*Vy+C
+    nz = 2*coo[:,0]*V0[:,2]+coo[:,3] #==2*A*Vz+D
+    sphere_n = +np.c_[nx,ny,nz]#.flatten() ##change sign from - to +
     return M,np.array(rlist),sphere_coeff,sphere_n
        
 def get_sphere_packing(C,r,Fa=20,Fv=20):

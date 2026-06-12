@@ -1272,8 +1272,8 @@ class MMesh(Mesh):
         self._ind_rr_quadface_order = np.array(flist) 
 
 
-    def orient(self,S0,A,B,C,D,Nv4):
-        orientrn = self.new_vertex_normals()
+    def orient(self,S0,A,B,C,D,Nv4,is_diagnet=False):
+        orientrn = self.new_vertex_normals(is_diagnet)
         ##print(Nv4.shape, orientrn.shape)
 
         ind1 = np.where(np.einsum('ij,ij->i',orientrn,Nv4) < 0)[0]
@@ -1291,13 +1291,16 @@ class MMesh(Mesh):
         x_orient = np.sqrt(np.abs(np.einsum('ij,ij->i',Nv4,orientrn)))        
         return B,C,D,Nv4,x_orient
 
-    def new_vertex_normals(self, is_orient_to_spherecenter=True, is_rrv4f4=True):
+    def new_vertex_normals(self,is_diagnet=False, is_orient_to_spherecenter=True, is_rrv4f4=True):
         "make vertex_normals orient non-convex direction"
-        v0,v1,v2,v3,v4 = self.rrv4f4 #(self.rr_star).T
+        if is_diagnet:
+            v0,v1,v2,v3,v4 = self.rr_star_corner
+        else:
+            v0,v1,v2,v3,v4 = self.rrv4f4 #(self.rr_star).T
         V = self.vertices
         VN = np.copy(self.vertex_normals())
         
-        orientrn = self.get_v4_orient_unit_normal(rregular=is_rrv4f4)[1]
+        orientrn = self.get_v4_orient_unit_normal(is_diagnet,is_rrv4f4)[1]
         id0 = np.where(np.einsum('ij,ij->i', orientrn, VN[v0]) < 0)[0]
         if len(id0)!=0:
             orientrn[id0] = -orientrn[id0]
@@ -2657,7 +2660,7 @@ class MMesh(Mesh):
         n = np.cross(t1,t2)
         un = n / np.linalg.norm(n,axis=1)[:,None]
         return v,an, un
-    
+
     def get_v4_orient_unit_normal(self,is_diagnet=False,rregular=True):
         "updated for each time, orientn; defined at rrv4f4"
         v,an,vN = self.get_v4_unit_normal(is_diagnet,rregular)
@@ -2667,6 +2670,17 @@ class MMesh(Mesh):
         a = np.sqrt(np.abs(np.einsum('ij,ij->i',vN,Nv))) ##vN*Nv=a^2
         return [an,vN,a]
 
+    def get_v4_orient_unit_normal2(self,is_diagnet=False,rregular=True):##new added
+        "updated for each time, orientn; defined at rrv4f4"
+        vN = self.new_vertex_normals(is_diagnet)
+        v = self.ver_rrv4f4
+        an = self.vertices[v]
+        Nv = self.vertex_normals()[v]
+        i = np.where(np.einsum('ij,ij->i',Nv,vN)<0)[0]
+        vN[i] = -vN[i]
+        a = np.sqrt(np.abs(np.einsum('ij,ij->i',vN,Nv))) ##vN*Nv=a^2
+        return [an, vN,a]
+    
     def get_net_crossing_angle(self, ut1, ut2):
         "for orthogonal / isogonal case"
         cos1 = np.einsum('ij,ij->i', ut1,ut2)

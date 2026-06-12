@@ -12,7 +12,7 @@ import numpy as np
 
 from pyface.image_resource import ImageResource
 
-from traits.api import on_trait_change, Bool, Range, Str, Trait #Color ##Hui replace Color by Trait
+from traits.api import on_trait_change, Bool, Range, Str, Trait, Button #Color ##Hui replace Color by Trait
 
 from traitsui.api import View, Item, VGroup, HGroup, CheckListEditor, \
     ColorEditor, Controller
@@ -75,7 +75,7 @@ class GeolabMesh(MeshPlotManager):
 
     edge_callbacks = ['color', 'wireframe', 'axial force', 'none']
 
-    face_plot = Str('face planarity', label='Faces')
+    face_plot = Str('gaussian curv.', label='Faces')
 
     face_callbacks = ['color', 'face planarity', 'gaussian curv.',
                       'mean curv.', 'none']
@@ -99,6 +99,10 @@ class GeolabMesh(MeshPlotManager):
     show_edge_legend = Bool(False, label='legend')
 
     show_face_legend = Bool(False, label='legend')
+    
+    show_bounding_box = Bool(label='BBox') ##Hui add
+    
+    save_unitscale_mesh = Button(label='SaveUnitscaleM') ##Hui add
 
     view = View(
         VGroup(VGroup(
@@ -171,6 +175,8 @@ class GeolabMesh(MeshPlotManager):
                        VGroup('show_curvature_directions',
                               ),
                        ),
+                HGroup('show_bounding_box',
+                        Item('save_unitscale_mesh',show_label=False),),
                 show_border=True),
             show_border=True),
         handler=_handler,
@@ -446,3 +452,49 @@ class GeolabMesh(MeshPlotManager):
         self.edge_color = (ec[0], ec[1], ec[2])
         self.face_color = (fc[0], fc[1], fc[2])
         self.update_plot()
+
+
+    @on_trait_change('show_bounding_box')
+    def plot_bounding_box(self):
+        name = 'box'
+        if self.show_bounding_box:
+            L,W,H = self.mesh.bounding_box()
+            v1 = np.array([L[1],W[1],H[0]])
+            v2 = np.array([L[1],W[0],H[0]])
+            v3 = np.array([L[1],W[1],H[1]])
+            v4 = np.array([L[1],W[0],H[1]])
+            v5 = np.array([L[0],W[1],H[0]])
+            v6 = np.array([L[0],W[0],H[0]])
+            v7 = np.array([L[0],W[1],H[1]])
+            v8 = np.array([L[0],W[0],H[1]])
+            ver = np.vstack((v1,v2,v3,v4,v5,v6,v7,v8))
+            f = [[0,4,6,2],[3,2,6,7],[7,6,4,5],[5,1,3,7],[1,0,2,3],[5,4,0,1]]
+
+            from geometrylab.geometry.meshpy import Mesh
+            from geometrylab.vtkplot.edgesource import Edges
+            
+            bm = Mesh()
+            bm.make_mesh(ver,f)
+            showe = Edges(bm,color = 'black',name=name)
+            self.meshmanager.add(showe)
+            
+            diag = np.sqrt((L[1]-L[0])**2+(W[1]-W[0])**2+(H[1]-H[0])**2)
+            print('diagonal of bounding box =', '%.1f' %diag)
+        else:
+            self.meshmanager.remove(name) 
+            
+    @on_trait_change('save_unitscale_mesh') 
+    def save_unitscale_diameter_mesh(self):
+        L,W,H = self.mesh.bounding_box()
+        scaled = (1 / np.sqrt((L[1]-L[0])**2+(W[1]-W[0])**2+(H[1]-H[0])**2))
+        
+        newV = self.mesh.vertices*scaled
+        newV -= np.mean(newV, axis=0) ##make points central to origin
+        
+        from geometrylab.geometry.meshpy import Mesh
+        
+        um = Mesh()
+        um.make_mesh(newV,self.mesh.faces_list())
+        name = ('{}_{}').format(self.mesh.name, 'unitscale')
+        um.make_obj_file(name)
+        print('\n\n Note: <'+'_unitscale'+'> mesh has been saved in <'+name+'>\n') #Hui

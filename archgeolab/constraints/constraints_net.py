@@ -869,16 +869,16 @@ def con_Snet(orientrn,is_rrvstar=True,is_diagnet=False,
         return H,r
     
     "this fun. is new added."
-    def _con_unit_sphere_normal(c_v0,c_a,c_b,c_c,c_d,c_n): ##need definition of unitnormal
-        "N==-(2*A*Vx+B, 2*A*Vy+C, 2*A*Vz+D)"
+    def _con_unit_sphere_normal(c_v0,c_a,c_b,c_c,c_d,c_n): 
+        "N==(2*A*Vx+B, 2*A*Vy+C, 2*A*Vz+D)"
         c_nx,c_ny,c_nz = c_n[arr1], c_n[arr1+numv], c_n[arr1+2*numv]
         c_vx,c_vy,c_vz = c_v0[arr1], c_v0[arr1+numv], c_v0[arr1+2*numv]
         def _con_coordinate(c_nx,c_vx,c_a,c_b):
-            "2*a*vx+b+nx = 0"
+            "2*a*vx+b-nx = 0" ##sign
             col = np.r_[c_nx,c_vx,c_a,c_b]
             row = np.tile(arr1, 4)
             one = np.ones(numv)
-            data = np.r_[one,2*X[c_a],2*X[c_vx],one]
+            data = np.r_[-one,2*X[c_a],2*X[c_vx],one]
             r = 2*X[c_a]*X[c_vx]
             H = sparse.coo_matrix((data,(row,col)), shape=(numv, N))
             return H,r
@@ -909,7 +909,8 @@ def con_Snet(orientrn,is_rrvstar=True,is_diagnet=False,
     # print('s1:', np.sum(np.square((H1*X)-r1)))
     # print('s2:', np.sum(np.square((Hn*X)-rn)))
     # print('s3:', np.sum(np.square((Hs*X)-rs)))
-    # print('snet:', np.sum(np.square((H*X)-r)))
+    #print('snet:', np.sum(np.square((H*X)-r)))
+    
     if kwargs.get('Snet_orient'):
         w1 = kwargs.get('Snet_orient')
         Ns_n = kwargs.get('Ns_n')
@@ -930,10 +931,11 @@ def con_Snet(orientrn,is_rrvstar=True,is_diagnet=False,
         H = sparse.vstack((H, Hr * w2))
         r = np.r_[r, rr * w2]
         if is_uniqR:
-            H0,r0 = con_constl(c_r,assigned_r,N)
+            H0,r0 = con_constl(c_r,np.array([assigned_r]),N)
             H = sparse.vstack((H, H0))
             r = np.r_[r,r0]
         #print('r:', np.sum(np.square((Hr*X)-rr)))
+        
     if kwargs.get('Snet_anet'):
         w3 = kwargs.get('Snet_anet')
         Ha,ra = _con_anet(c_a)
@@ -1087,7 +1089,7 @@ def con_pseudogeodesic_pattern(name,is_diagnet=False,is_orient=True,
         Ha,ra = con_constangle2(X,c_on,c_n,c_cos)
         #sin = np.sqrt(1-X[c_cos]**4)*np.ones(num)
         if coss:
-            Hu,ru = con_constl(np.array([c_cos],dtype=int),coss,len(X))
+            Hu,ru = con_constl(np.array([c_cos],dtype=int),np.array([coss]),len(X))
             Ha = sparse.vstack((Ha,Hu))
             ra = np.r_[ra,ru]
             #sin = np.sqrt(1-coss**2)*np.ones(num)

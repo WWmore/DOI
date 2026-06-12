@@ -158,8 +158,8 @@ class DOINet(GeolabComponent):
     
     CGC_net = Bool(label='CGC')
     Gnet = Bool(label='Gnet') 
-    is_uniq_rho = Bool(label='kg')
-    CGC_uniq_rho_assigned = Float(label='const.kg')
+    is_uniq_rho = Bool(label='rhog')
+    CGC_uniq_rho_assigned = Float(label='const.rhog')
       
     CNC_net = Bool(label='CNC') ##Snet with const.r
     Snet = Bool(label='Snet')
@@ -188,7 +188,7 @@ class DOINet(GeolabComponent):
     #--------------Plotting: -----------------------------
     show_oscu_tangent = Bool(label='oscuT')
     
-    show_cgc_centers = Bool(label='cgcCenters')
+    show_cgc_centers = Bool(label='CGC-centers')
     
     show_midpoint_edge1 = Bool(label='E1')
     show_midpoint_edge2 = Bool(label='E2')
@@ -224,6 +224,7 @@ class DOINet(GeolabComponent):
     is_orient_normal = Bool(True,label='_OrientN_')
     is_remedied_BiN = Bool(True,label='_remedyBiN_')
     is_smoothed_BiN = Bool(False,label='_SmoothBiN_')
+    CGC_strip_offset_scale = Float(-0.01,label='CGCoffset')
  
     dist_inverval = Float(1.3,label='Dist')
     set_unroll_strip_fairness = Float(0.005,label='Fair')
@@ -258,13 +259,14 @@ class DOINet(GeolabComponent):
                       HGroup('CGC_net',
                              'is_uniq_rho',
                              Item('CGC_uniq_rho_assigned',show_label=False),
-                             'Gnet',
-                             'CNC_net','Anet',),
-                      # HGroup('Snet',
-                      #        #'Snet_orient',
-                      #        'Snet_constR',
-                      #        Item('is_uniqR',show_label=False),
-                      #        'Snet_constR_assigned'),
+                             'Gnet',),
+                      HGroup('CNC_net',
+                             'Snet',
+                             #'Snet_orient',
+                             #'Snet_constR',
+                             Item('is_uniqR',show_label=False),
+                             'Snet_constR_assigned',
+                             'Anet',),
                       HGroup('Pseudogeodesic_net',
                              'is_assigned_angle',
                              Item('assigned_angle',show_label=False)),
@@ -285,9 +287,10 @@ class DOINet(GeolabComponent):
         Group(
             VGroup(HGroup(#'show_midpoint_edge1',
                           #'show_midpoint_edge2',
-                          'show_midpoint_polyline1',
-                          'show_midpoint_polyline2',
+                          #'show_midpoint_polyline1',
+                          #'show_midpoint_polyline2',
                           #'show_midline_mesh',
+                          'show_isoline',
                           'show_diagonal_red_mesh',
                          'show_diagonal_blue_mesh',
                          'show_diagonal_mesh',
@@ -318,8 +321,7 @@ class DOINet(GeolabComponent):
               ###-------------------------------------
               ##Pnet
               VGroup(
-                  HGroup('switch_1st_or_2nd','is_both',
-                         'show_isoline','switch_even_or_all'),
+                  HGroup('switch_1st_or_2nd','is_both','switch_even_or_all'),
                   HGroup('is_orient_tangent',
                          'is_orient_normal',
                          'is_remedied_BiN',
@@ -330,7 +332,9 @@ class DOINet(GeolabComponent):
                          'show_CNC_strip',),
                     ##unrollment
                     HGroup('show_isolinestrip_unroll',
-                           'strip_width','is_central_strip'),
+                           'strip_width',
+                           'CGC_strip_offset_scale',
+                           'is_central_strip'),
                     HGroup('dist_inverval',
                            'set_unroll_strip_fairness',
                            'is_unroll_midaxis'),
@@ -495,17 +499,15 @@ class DOINet(GeolabComponent):
         if self.hide_face:
             self.meshmanager.hide_faces()
         else:
-            self.meshmanager.plot_faces(color='white',#(100, 193, 151),#'grammarly',#,,
-                                        glossy=1,
-                                        opacity=1,
-                                        )#color=(192,174,136)turquoise
+            self.meshmanager.plot_faces(color=(232,224,213),smooth=True,
+                                        glossy=0,opacity=0.99)
 
     @on_trait_change('hide_edge')
     def plot_hide_edges(self):
         if self.hide_edge:
             self.meshmanager.hide_edges()
         else:
-            self.meshmanager.plot_edges(color=(157,157,157),##(77,83,87),##
+            self.meshmanager.plot_edges(color=(0,0,0),#(157,157,157),##(77,83,87),##
                                         tube_radius=0.4*self.meshmanager.r)
             #geo:red:(240,114,114);asy:blue:(98,113,180)
             #self.meshmanager.plot_edges(color =(98,113,180),tube_radius=1.2*self.meshmanager.r)
@@ -1034,15 +1036,20 @@ class DOINet(GeolabComponent):
             #self.oscu_rrv_tangent = False  ##works but no use
             self.orient_rrv_normal = False
             
+    @on_trait_change('Snet')
+    def set_Snet(self): 
+        if self.Snet:
+            self.Snet_orient = True
+        else:
+            self.Snet_orient = False        
+            
     @on_trait_change('CNC_net')
     def set_CNC_net(self): 
         if self.CNC_net:
             self.Snet = True
-            self.Snet_orient = True
             self.Snet_constR = True
         else:
             self.Snet = False
-            self.Snet_orient = False
             self.Snet_constR = False
 
             
@@ -1122,22 +1129,24 @@ class DOINet(GeolabComponent):
             pl1,pl2,_,_,_,_ = self.mesh.get_rregular_split_list_for_polysegmnet(is_diagnet=False,is_poly=True)
             #pl1,pl2 = get_plot_ordered_isolines(self.mesh)
             
-            if self.is_both:
-                self.meshmanager.plot_polyline(pl1,color=(240,114,114),
-                                               tube_radius=1.7*self.meshmanager.r,
-                                               name=name+'1')
-                self.meshmanager.plot_polyline(pl2,color=(98,113,180),
-                                               tube_radius=1.7*self.meshmanager.r,
-                                               name=name+'2')
-            else:
-                if self.switch_1st_or_2nd:
-                    pl, clr, name = pl1, (240,114,114), name+'1'
-                else:
-                    pl, clr, name = pl2, (98,113,180), name+'2'
+            #if self.is_both:
+            self.meshmanager.plot_polyline(pl1,color=(163,163,163), ##pink(240,114,114)
+                                           tube_radius=1*self.meshmanager.r,
+                                           glossy=0.1,
+                                           name=name+'1')
+            self.meshmanager.plot_polyline(pl2,color=(0,154,62), ##blue(98,113,180)
+                                           tube_radius=1*self.meshmanager.r,
+                                           glossy=0.1,
+                                           name=name+'2')
+        #     else:
+        #         if self.switch_1st_or_2nd:
+        #             pl, clr, name = pl1, (240,114,114), name+'1'
+        #         else:
+        #             pl, clr, name = pl2, (98,113,180), name+'2'
                 
-                self.meshmanager.plot_polyline(pl,color=clr,
-                                               tube_radius=1.7*self.meshmanager.r,
-                                               name=name)
+        #         self.meshmanager.plot_polyline(pl,color=clr,
+        #                                        tube_radius=1.7*self.meshmanager.r,
+        #                                        name=name)
         else:
             self.meshmanager.remove([name+'1',name+'2'])
             
@@ -1207,9 +1216,9 @@ class DOINet(GeolabComponent):
         if self.show_diagonal_red_mesh:
             dm = self.mesh.get_diagonal_mesh()
             ### geo:red:(240,114,114);asy:blue:(98,113,180)
-            showe = Edges(dm,color ='white',#(98,113,180)(255,85,127),(0,59,117)
-                          tube_radius=1*self.meshmanager.r, # 2*
-                          glossy=1,
+            showe = Edges(dm,color =(47,56,126),#(98,113,180)(255,85,127),(0,59,117)
+                          tube_radius=1.3*self.meshmanager.r,
+                          glossy=0.1,
                           name=name+'e')
             # showf = Faces(dm,color ='white',#(100,0,0),
             #               opacity=0.8,
@@ -1292,7 +1301,7 @@ class DOINet(GeolabComponent):
     def plot_cgc_centers(self):
         name = 'cgc_c'
         if self.show_cgc_centers:  
-            Cg1,Cg2,rho = self.optimizer.get_geodesic_curvature(self.switch_diag_or_ctrl)
+            Cg1,Cg2,rho,_ = self.optimizer.get_geodesic_curvature(self.switch_diag_or_ctrl)
             V = self.mesh.vertices[self.mesh.ver_rrv4f4]
             
             from archgeolab.archgeometry.curves import make_polyline_from_endpoints
@@ -1417,11 +1426,13 @@ class DOINet(GeolabComponent):
         name = 'Isoline_strip'
         if self.show_CGC_strip or self.show_CNC_strip or self.show_Pnet_rectifystrip:
             width = self.strip_width * self.mesh.mean_edge_length() * 0.5
+            offset = self.CGC_strip_offset_scale * self.mesh.mean_edge_length()
             
             if self.show_CGC_strip:
                 sm1,_,sm2,_ = self.optimizer.get_CGC_circular_strip(
                     width,self.switch_diag_or_ctrl,self.is_central_strip,
-                    is_even_selection=self.switch_even_or_all)
+                    is_even_selection=self.switch_even_or_all,
+                    offset_scale = offset)
             elif self.show_CNC_strip:
                 sm1,_,sm2,_ = self.optimizer.get_CNC_circular_strip(
                     width,self.switch_diag_or_ctrl,self.is_central_strip,
@@ -1437,19 +1448,28 @@ class DOINet(GeolabComponent):
 
             
             if self.is_both:
+                
                 sm, clr, name1 = sm1, 'orange', name+'1'
-                data = sm.face_planarity()
-                showf = Faces(sm,face_data=data,
-                              lut_range=[0,np.max(data)],color='blue-red',#color=clr,
-                              name=name1+'f') 
+                if False:
+                    data = sm.face_planarity()
+                    showf = Faces(sm,face_data=data,
+                                  lut_range=[0,np.max(data)],color='blue-red',
+                                  #color=clr,
+                                  name=name1+'f') 
+                else:
+                    showf = Faces(sm,color=clr,name=name1+'f') 
                 showe = Edges(sm,color=clr,name=name1+'e')
                 self.meshmanager.add([showf,showe])
 
                 sm, clr, name2 = sm2, 'yellow', name+'2'
-                data = sm.face_planarity()
-                showf = Faces(sm,face_data=data,
-                              lut_range=[0,np.max(data)],color='blue-red',#color=clr,
-                              name=name2+'f') 
+                if False:
+                    data = sm.face_planarity()
+                    showf = Faces(sm,face_data=data,
+                                  lut_range=[0,np.max(data)],color='blue-red',
+                                  #color=clr,
+                                  name=name2+'f') 
+                else:
+                    showf = Faces(sm,color=clr,name=name2+'f') 
                 showe = Edges(sm,color=clr,name=name2+'e')
                 self.meshmanager.add([showf,showe])
                 
@@ -1522,9 +1542,9 @@ class DOINet(GeolabComponent):
 
             else:
                 if self.switch_1st_or_2nd:#geo:red:(240,114,114);asy:blue:(98,113,180)
-                    sm,lists, clr, name = sm1,list1, (240,114,114), name+'1'
+                    sm,lists, clr, name = sm1,list1, 'orange', name+'1'
                 else:
-                    sm,lists, clr, name = sm2,list2, (98,113,180), name+'2'
+                    sm,lists, clr, name = sm2,list2, 'yellow', name+'2'
                     
                 um = unroll_multiple_strips(sm,lists,dist,
                                             step=self.dist_inverval,coo=2,

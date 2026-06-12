@@ -404,7 +404,8 @@ class GP_DOINet(GuidedProjectionBase):
         #     X = np.r_[X,lt1,lt2,t1.flatten('F'),t2.flatten('F')] 
 
         if self.orient_rrv_normal:
-            _,vN,a = self.mesh.get_v4_orient_unit_normal(self.is_diag_or_ctrl)
+            #_,vN,a = self.mesh.get_v4_orient_unit_normal(self.is_diag_or_ctrl)
+            _,vN,a = self.mesh.get_v4_orient_unit_normal2(self.is_diag_or_ctrl)
             X = np.r_[X,vN.flatten('F'),a]     
             
         if self.get_weight('CGC'):
@@ -429,8 +430,7 @@ class GP_DOINet(GuidedProjectionBase):
             X = np.r_[X,V4N.flatten('F')]
         
         if self.get_weight('Snet'):
-            r = self.get_weight('Snet_constR')
-            x_snet,_ = self.get_snet(r,self.is_diag_or_ctrl)
+            x_snet,_ = self.get_snet(self.is_diag_or_ctrl)
             X = np.r_[X,x_snet]
 
         ### Pnet: ##merge pseudogeo_1st and pseudogeo_2nd to Pnet
@@ -616,7 +616,7 @@ class GP_DOINet(GuidedProjectionBase):
             self.add_iterative_constraint(H, r, 'Anet')
 
         if self.get_weight('Snet'):
-            orientrn = self.mesh.new_vertex_normals()
+            orientrn = self.mesh.new_vertex_normals(self.is_diag_or_ctrl)
             H,r = con_Snet(orientrn,
                            is_diagnet=self.is_diag_or_ctrl,
                            is_uniqR=self.is_uniqradius,
@@ -762,7 +762,8 @@ class GP_DOINet(GuidedProjectionBase):
     
     def get_orient_rr_normal(self,is_diagnet=False,initialized=True):
         if initialized or self.is_initial or not self.orient_rrv_normal:
-            return self.mesh.get_v4_orient_unit_normal(is_diagnet) ##==[an,vN,a]
+            #return self.mesh.get_v4_orient_unit_normal(is_diagnet) ##==[an,vN,a]
+            return self.mesh.get_v4_orient_unit_normal2(is_diagnet)
         elif self.orient_rrv_normal:
             v = self.mesh.ver_rrv4f4
             an = self.mesh.vertices[v]
@@ -794,7 +795,8 @@ class GP_DOINet(GuidedProjectionBase):
         else:
             v0,v1,v2,v3,v4 = self.mesh.rrv4f4
         
-        _,vN,_ = self.mesh.get_v4_orient_unit_normal(is_diagnet)
+        #vN = self.mesh.get_v4_orient_unit_normal(is_diagnet)[1]
+        vN = self.mesh.get_v4_orient_unit_normal2(is_diagnet)[1]
         
         eps = np.finfo(float).eps
         
@@ -865,9 +867,14 @@ class GP_DOINet(GuidedProjectionBase):
 
     def get_CGC_circular_strip(self,width,is_diagnet=False,
                                is_centerline=False,is_smooth=False,
-                               is_even_selection=False):
+                               is_even_selection=False,offset_scale=0):
         v = self.mesh.ver_rrv4f4
         an = self.mesh.vertices[v]
+        
+        if offset_scale:
+            N = self.mesh.vertex_normals()[v]
+            an += N * offset_scale
+        
         if self.is_initial: 
             Cg1, Cg2, rho, _ = self.get_geodesic_curvature(is_diagnet)
         else:
@@ -958,7 +965,7 @@ class GP_DOINet(GuidedProjectionBase):
         sm2 = get_strip_from_rulings(an2[ind2],N[ind2],arr2,is_smooth,is_even_selection)
         return sm1,arr1,sm2,arr2        
 
-    def get_snet(self,is_r,is_diagnet=False,is_orient=True):
+    def get_snet(self,is_diagnet=False,is_orient=True):
         """
         each vertex has one [a,b,c,d,e] for sphere equation:
             f=a(x^2+y^2+z^2)+(bx+cy+dz)+e=0
@@ -989,10 +996,10 @@ class GP_DOINet(GuidedProjectionBase):
         A_sqrt = np.sqrt(A)
         XA = np.r_[VV,A,B,C,D,E,A_sqrt]
         if is_orient: ##always True
-            B,C,D,Nv4,n4_sqrt = self.mesh.orient(S0,A,B,C,D,Nv4)
+            B,C,D,Nv4,n4_sqrt = self.mesh.orient(S0,A,B,C,D,Nv4,is_diagnet)
             XA = np.r_[VV,A,B,C,D,E,A_sqrt]  
             XA = np.r_[XA, Nv4.flatten('F'),n4_sqrt]
-        if is_r:
+        if self.get_weight('Snet_constR'):
             r = np.mean(radius)
             XA = np.r_[XA,r]
         return XA, Nv4
@@ -1011,9 +1018,8 @@ class GP_DOINet(GuidedProjectionBase):
         centers,r,coeff,Nv4 = interpolate_sphere(S0,S1,S2,S3,S4)
         if self.get_weight('Snet_orient'):
             A,B,C,D,E = coeff.reshape(5,-1)
-            _,_,_,Nv4,_ = self.mesh.orient(S0,A,B,C,D,Nv4)
-            #Nv4 = self.mesh.get_v4_orient_unit_normal()[1][self.mesh.ind_rr_star_v4f4]
-            centers = S0+r[:,None]*Nv4
+            _,_,_,Nv4,_ = self.mesh.orient(S0,A,B,C,D,Nv4,is_diagnet)
+            centers = S0-r[:,None]*Nv4 ##note sign
         if center:
             er0 = np.abs(np.linalg.norm(S0-centers,axis=1)-r)
             er1 = np.abs(np.linalg.norm(S1-centers,axis=1)-r)
@@ -1081,7 +1087,8 @@ class GP_DOINet(GuidedProjectionBase):
             else:
                 v,v1,v2,v3,v4 = self.mesh.rrv4f4
 
-            vN = self.mesh.get_v4_orient_unit_normal(is_diagnet)[1]
+            #vN = self.mesh.get_v4_orient_unit_normal(is_diagnet)[1]
+            vN = self.mesh.get_v4_orient_unit_normal2(is_diagnet)[1]
             _,_,ut1,ut2,_,_ = self.mesh.get_v4_unit_tangents(is_diagnet)
             
             T2,T1 = np.cross(vN,ut1), np.cross(vN,ut2)
