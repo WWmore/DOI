@@ -14,3 +14,7 @@ objs/knitcandela/knitcandela_33_DGPC.obj
 /objs/obj_rot
 *.obj
 *.obj
+/objs
+/objs
+objs/.DS_Store
+objs/obj_rot/.DS_Store

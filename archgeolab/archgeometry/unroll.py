@@ -40,14 +40,16 @@ def unroll_multiple_strips(sm,num_list,dist=None,step=1.2,
             "flip Vi from top to bottom"
             Vi = np.vstack((Vi[:num][::-1],Vi[num:][::-1]))
         _,vlist,flist = unroll_1_strip(Vi,coo,anchor,efair,ee,itera,is_midaxis,w_straight)
-        if dist is None:
-            v1,v2 = vlist[0], vlist[num]
-            dist = np.linalg.norm(v2-v1)
-        anchor += step*dist##NOTE: if +=step:const_controled_dist, if +=step*l, auto-dist
-        allv = np.vstack((allv,vlist))
-        allf = np.vstack((allf,flist+istart))
-        move = num*2
-        istart += move  
+        
+        if vlist is not None: ##Hui new added for different lengths of strips
+            if dist is None:
+                v1,v2 = vlist[0], vlist[num]
+                dist = np.linalg.norm(v2-v1)
+            anchor += step*dist##NOTE: if +=step:const_controled_dist, if +=step*l, auto-dist
+            allv = np.vstack((allv,vlist))
+            allf = np.vstack((allf,flist+istart))
+            move = num*2
+            istart += move  
     allsm = Mesh()
     allsm.make_mesh(allv[1:],allf[1:])
     
@@ -137,32 +139,37 @@ def opt_unfold_quad(V,coo,anchor,efair,ee,itera,is_midaxis,w_straight):
     #start_time = time.time()
     
     num = int(len(V)/2)
-    X,var,lh,ll,lr,l13,l24,fixp = initial_unfold(V,coo,anchor,is_midaxis,w_straight)
-    n = 0
-    K = matrix_fair(num,var,efair)
-    I = sparse.eye(var,format='coo')*ee**2
-
-    opt_num, opt = 100, 100
-    "note should have opt-check, otherwise only run once for asymtotpicstrips"
-    while n < itera and (opt_num>1e-6 or opt>1e-6) and opt_num<1e+6:
-    #while n < itera and opt_num>0.00001 and opt_num<1e+6:
-        H, r, opt = con_isometry(X,num,lh,ll,lr,l13,l24,coo,anchor,fixp,is_midaxis,w_straight)
-        X = sparse.linalg.spsolve(H.T*H+K.T*K+I, H.T*r+np.dot(ee**2,X).T,permc_spec=None, use_umfpack=True)
-        n += 1
-        opt_num = np.sum(np.square((H*X)-r))
-        #print('Optimize the unfolding mesh:',n, '%.2g' %opt, '%.2g' %opt_num)#'%.2g' %opt_num,
+    #print(num)
     
-    print(n, '%.2g' %opt_num),#'%.2g s' %(time.time() - start_time))
+    if num > 2: ##Hui new added for different lengths of strips
+        X,var,lh,ll,lr,l13,l24,fixp = initial_unfold(V,coo,anchor,is_midaxis,w_straight)
+        n = 0
+        K = matrix_fair(num,var,efair)
+        I = sparse.eye(var,format='coo')*ee**2
     
-    Vl = X[:3*num].reshape(-1,3,order='F')
-    Vr = X[3*num:6*num].reshape(-1,3,order='F')
-    V = np.vstack((Vl,Vr))
-    arr = np.arange(num)
-    v1,v2,v3,v4 = arr[:-1],arr[:-1]+num,arr[1:]+num,arr[1:]
-    flist = np.c_[v1,v2,v3,v4]
-    sm = Mesh()
-    sm.make_mesh(V, flist)    
-    return sm,V,flist
+        opt_num, opt = 100, 100
+        "note should have opt-check, otherwise only run once for asymtotpicstrips"
+        while n < itera and (opt_num>1e-6 or opt>1e-6) and opt_num<1e+6:
+        #while n < itera and opt_num>0.00001 and opt_num<1e+6:
+            H, r, opt = con_isometry(X,num,lh,ll,lr,l13,l24,coo,anchor,fixp,is_midaxis,w_straight)
+            X = sparse.linalg.spsolve(H.T*H+K.T*K+I, H.T*r+np.dot(ee**2,X).T,permc_spec=None, use_umfpack=True)
+            n += 1
+            opt_num = np.sum(np.square((H*X)-r))
+            #print('Optimize the unfolding mesh:',n, '%.2g' %opt, '%.2g' %opt_num)#'%.2g' %opt_num,
+        
+        print(n, '%.2g' %opt_num),#'%.2g s' %(time.time() - start_time))
+        
+        Vl = X[:3*num].reshape(-1,3,order='F')
+        Vr = X[3*num:6*num].reshape(-1,3,order='F')
+        V = np.vstack((Vl,Vr))
+        arr = np.arange(num)
+        v1,v2,v3,v4 = arr[:-1],arr[:-1]+num,arr[1:]+num,arr[1:]
+        flist = np.c_[v1,v2,v3,v4]
+        sm = Mesh()
+        sm.make_mesh(V, flist)    
+        return sm,V,flist
+    else:
+        return None, None, None
 
 def initial_unfold(V,coo,anchor,is_midaxis,w_straight):
     """ X = [Vl ;  Vr]

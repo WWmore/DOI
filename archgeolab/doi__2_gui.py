@@ -880,7 +880,7 @@ class DOINet(GeolabComponent):
             poly.refine(steps=3)  
             self.meshmanager.plot_polyline(polyline=poly,glossy=1,
                                            tube_radius=1.5*self.meshmanager.r,
-                                           color = 'r',name=name)
+                                           color = 'black',name=name) #'r'
             ##print(self.mesh.boundary_curves(True),self.mesh.get_a_closed_boundary())
         else:
             self.meshmanager.remove(name)
@@ -900,7 +900,7 @@ class DOINet(GeolabComponent):
             self.optimizer.i_glide_bdry_ver.append(v)
             self.meshmanager.plot_polyline(polyline=poly,glossy=1,
                                            tube_radius=1.5*self.meshmanager.r,
-                                           color = 'r',name=name)
+                                           color = 'black',name=name)
         else:
             self.meshmanager.remove(name)
 
@@ -919,7 +919,7 @@ class DOINet(GeolabComponent):
             self.optimizer.i_glide_bdry_ver.append(v)
             self.meshmanager.plot_polyline(polyline=poly,glossy=1,
                                            tube_radius=1.5*self.meshmanager.r,
-                                           color = 'r',name=name)
+                                           color = 'black',name=name)
         else:
             self.meshmanager.remove(name)
     @on_trait_change('glide_4th_bdry')
@@ -939,7 +939,7 @@ class DOINet(GeolabComponent):
             self.optimizer.i_glide_bdry_ver.append(v)
             self.meshmanager.plot_polyline(polyline=poly,glossy=1,
                                            tube_radius=1.5*self.meshmanager.r,
-                                           color = 'r',name=name)
+                                           color = 'black',name=name)
         else:
             self.meshmanager.remove(name)
     @on_trait_change('glide_5th_bdry')
