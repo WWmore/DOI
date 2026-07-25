@@ -2390,6 +2390,26 @@ class MMesh(Mesh):
     #--------------------------------------------------------------------------
     #                 Plot polylines: isolines + diagonals
     #-------------------------------------------------------------------------- 
+    def get_a_closed_boundary(self,first=True):
+        "for non-closed-mesh, return 1-closed-bdry-vertices"
+        vblist = self.boundary_curves(corner_split=True)
+        if first:
+            vcb = vblist[0]
+            vblist = np.delete(vblist, 0, 0)
+        else:
+            vcb = vblist[1]
+            vblist = np.delete(vblist, 1, 0)
+        vs,vd = vcb[0],vcb[-1]
+        while vs!=vd:
+            for i in range(len(vblist)):
+                vi = vblist[i]
+                if vi[0]==vd:
+                    vcb = np.r_[vcb,vi[1:]]
+                    vd = vi[-1]
+                    vblist = np.delete(vblist, i, 0)
+                    break
+        vcb = np.delete(vcb,-1)
+        return vcb, self.vertices[vcb]
     
     def get_quad_mesh_1family_isoline(self,is_diagnet=False,direction=True,edge=False):
         V = self.vertices

@@ -13,8 +13,16 @@ Created on Thu Apr 24 11:13:42 2025
 # For inquiries contact hwangchn@outlook.com
 
 #------------------------------------------------------------------------------
+#import os
+#os.environ['KMP_DUPLICATE_LIB_OK']='True'
+
+
 import os
-os.environ['KMP_DUPLICATE_LIB_OK']='True'
+# 禁用Qt6相关后端
+os.environ["QT_API"] = "pyqt5"
+os.environ["ETS_TOOLKIT"] = "qt"
+# 屏蔽vtk/mayavi自动加载Qt6逻辑
+os.environ["VTK_USE_QT6"] = "0"
 
 import sys
 
@@ -38,13 +46,20 @@ if __name__ == '__main__':
     snet = a + r'/obj_snet'
 
     file = snet +r'/cmc1.obj'
-    file = rot +r'/conical1_diagKite.obj'
+    #file = rot +r'/conical1_diagKite.obj'
     #file = rot +r'/chebyshev_sphere.obj'
-    file = rot +r'/chebyshev_sphere_cut3.obj'
+    
+    file = rot +r'/rot2_unitscale_cut_CNC_seam.obj'
+    file = rot +r'/unduloid_cut_unitscale_CNC_r=2_seam.obj'
+    file = rot +r'/unduloid1_cusp_unitscale_CNC-r=0.25_seam.obj'
+    
+    #file = rot +r'/crpc/rot_a_pos_50_crpc_uv_seam.obj'
+    #file = rot +r'/crpc/rot_a_pos_1_crpc_uv_seam.obj'
+    #file = rot +r'/crpc/rot_a_pos_5_crpc_uv_seam.obj'
     
     
-    file = rot +r'/rot2_unitscale_cut_CNC.obj'
-    file = rot +r'/unduloid1_2cusps.obj'
+    #file = rot +r'/rot2_unitscale_cut_CNC.obj'
+    #file = rot +r'/unduloid1_2cusps.obj'
     #file = rot +r'/unduloid_cut_unitscale.obj'
     
     # file = rot +r'/pseudosphere_unitscale.obj'

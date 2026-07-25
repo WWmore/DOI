@@ -100,6 +100,16 @@ def con_constl(c_ld1,init_l1,N):
     H = sparse.coo_matrix((data,(row,col)), shape=(num, N))
     return H,r
 
+def con_constangle(X,c_ud1,c_ud2,angle0):
+    "ud1*ud2 == const.; len(angle0) ==num"
+    num = len(angle0)
+    row4 = np.tile(np.arange(num),6)
+    col = np.r_[c_ud1,c_ud2]
+    data = np.r_[X[c_ud2],X[c_ud1]]
+    r = np.einsum('ij,ij->i',X[c_ud1].reshape(-1,3, order='F'),X[c_ud2].reshape(-1,3,order='F'))+angle0
+    H = sparse.coo_matrix((data,(row4,col)), shape=(num, len(X)))
+    return H,r
+
 def con_constangle2(X,c_u1,c_u2,c_a):
     "u1*u2 = a; a is 1 variable!"
     num = int(len(c_u1)/3)

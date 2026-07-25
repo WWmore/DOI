@@ -27,6 +27,8 @@ from geometrylab.vtkplot.edgesource import Edges
 from geometrylab.vtkplot.facesource import Faces
 from geometrylab.geometry import Polyline
 
+from archgeolab.archgeometry.curves import make_polyline_from_endpoints
+
 from doi__3_opt import GP_DOINet
 from archgeolab.archgeometry.conicSection import get_sphere_packing,\
     get_vs_interpolated_sphere
@@ -130,6 +132,8 @@ class DOINet(GeolabComponent):
     #--------------Optimization: -----------------------------
     button_clear_constraint = Button(label='Clear')
     
+    planarity = Bool(label='PQ')
+    
     orthogonal = Bool(label='Orthogonal')
     
     GPC_net = Bool(label='GPC')
@@ -184,6 +188,13 @@ class DOINet(GeolabComponent):
     is_assigned_angle = Bool(label='Assigned')
     assigned_angle = Float(60)## if is_assigned_angle=True, const.angle of <normal,tangentplane>
     
+    
+    set_another_poly = Range(low=0, high=1, value=0,label='2ndPoly')
+    opt_planar_polyline1 = Bool(label='PlanarPly1')
+    opt_planar_polyline2 = Bool(label='PlanarPly2')
+    #--------------- Transformation:  --------------------
+    isometry = Float(0,label='Iso(Ctrl)')
+    isometry_checkboard = Float(0,label='Iso(CBP)')
 
     #--------------Plotting: -----------------------------
     show_oscu_tangent = Bool(label='oscuT')
@@ -218,6 +229,13 @@ class DOINet(GeolabComponent):
     show_Pnet_rectifystrip = Bool(label='Pstrip')
     show_isolinestrip_unroll = Bool(label='Unroll')
     
+    show_isometric_edge_errors=Bool(label='isoErr')
+    
+    #show_planar_poly1_normal = Bool(label='Ply1-N')
+    show_planar_poly1_plane= Bool(label='Ply1-Pln')
+    #show_planar_poly2_normal = Bool(label='Ply2-N')
+    show_planar_poly2_plane= Bool(label='Ply2-Pln')
+    
     strip_width = Float(0.5,label='Width')
     is_central_strip = Bool(True,label='_Central_')
     is_orient_tangent = Bool(True,label='_OrientT_')
@@ -248,7 +266,7 @@ class DOINet(GeolabComponent):
                      #'oscu_rrv_tangent',
                      'orient_rrv_normal',
                      ),    
-              HGroup('orthogonal','GPC_net'),
+              HGroup('orthogonal','GPC_net','planarity',),
               
               VGroup(
                       HGroup('DOI_net','is_DOI_SIR','is_DOI_SIR_diagKite'),
@@ -281,6 +299,10 @@ class DOINet(GeolabComponent):
               #HGroup(#Item('button_CMC_mesh',show_label=False),
                      #Item('button_minimal_mesh',show_label=False),
                      #),
+              HGroup(Item('set_another_poly'),
+                     'opt_planar_polyline1',
+                     'opt_planar_polyline2',),
+              HGroup('isometry','isometry_checkboard',),
 
         label='Opt.Net',show_border=True),
         #------------------------------------------------  
@@ -308,13 +330,16 @@ class DOINet(GeolabComponent):
                          'show_snet_tangent',
                          'show_snet_normal',),
                   
-                  HGroup(Item('interactive',
-                              tooltip='InteractiveOptimization',),
-                         Item('_'),
-                         Item('optimize',show_label=False),
-                         Item('reinitialize',show_label=False),
-                         'hide_face','hide_edge',
-                         show_border=False),  
+                  HGroup('show_isometric_edge_errors',
+                         'show_planar_poly1_plane',
+                         'show_planar_poly2_plane',),
+                  # HGroup(Item('interactive',
+                  #             tooltip='InteractiveOptimization',),
+                  #        Item('_'),
+                  #        Item('optimize',show_label=False),
+                  #        Item('reinitialize',show_label=False),
+                  #        'hide_face','hide_edge',
+                  #        show_border=False),  
                   
               label='Point / Poly / Mesh',show_border=False),
             
@@ -424,8 +449,8 @@ class DOINet(GeolabComponent):
                 tooltip='InteractiveOptimization',),
            Item('_'),
            Item('optimize',show_label=False),
-           Item('reinitialize',show_label=False),
            'hide_face','hide_edge',
+           Item('reinitialize',show_label=False),
            show_border=False),     
          #----------------    
          show_labels=False,show_border=False),                
@@ -645,6 +670,25 @@ class DOINet(GeolabComponent):
         else:
             self.meshmanager.remove(name)
             self.optimizer.set_weight('selected_y0', 0)
+            
+    @on_trait_change('set_another_poly,opt_planar_polyline1')
+    def set_one_polyline(self):
+        "the default direction is 0: v1,v,v3 from up to down"
+        self.optimizer.set_another_polyline = self.set_another_poly
+        self.optimizer.set_weight('planar_ply1', self.opt_planar_polyline1)
+        if self.opt_planar_polyline1:
+            self.optimizer.index_of_mesh_polylines()
+        else:
+            self.optimizer.index_of_strip_along_polyline()            
+            
+    @on_trait_change('opt_planar_polyline2')
+    def set_another_polyline(self):
+        "the default direction is 0: v2,v,v4 from left to right"
+        self.optimizer.set_weight('planar_ply2', self.opt_planar_polyline2)
+        if self.opt_planar_polyline2:
+            self.optimizer.index_of_mesh_polylines()
+        else:
+            self.optimizer.index_of_strip_along_polyline()
   
         # ---------------------------------------------------------------------
         #                     Fairness weights:
@@ -988,6 +1032,7 @@ class DOINet(GeolabComponent):
     # -------------------------------------------------------------------------
     @on_trait_change('button_clear_constraint')
     def set_clear_webs(self):
+        self.planarity = False
         self.orthogonal = False
         self.GPC_net = False
         
@@ -1011,6 +1056,9 @@ class DOINet(GeolabComponent):
         
         self.Pseudogeodesic_net = False
         self.is_assigned_angle = False
+        
+        self.opt_planar_polyline1 = False
+        self.opt_planar_polyline2 = False
 
 
 
@@ -1303,8 +1351,6 @@ class DOINet(GeolabComponent):
         if self.show_cgc_centers:  
             Cg1,Cg2,rho,_ = self.optimizer.get_geodesic_curvature(self.switch_diag_or_ctrl)
             V = self.mesh.vertices[self.mesh.ver_rrv4f4]
-            
-            from archgeolab.archgeometry.curves import make_polyline_from_endpoints
             pl1 = make_polyline_from_endpoints(V,Cg1)
             pl2 = make_polyline_from_endpoints(V,Cg2)
             
@@ -1558,7 +1604,86 @@ class DOINet(GeolabComponent):
                 self.save_new_mesh, self.label = um, name
         else:
             self.meshmanager.remove([name+'1e',name+'1f',name+'2e',name+'2f'])                 
- 
+
+    
+    @on_trait_change('show_planar_poly1_plane')
+    def plot_polyline1_planar_plane(self):
+        name = 'ply1_pln'
+        if self.show_planar_poly1_plane:  
+            sm= self.optimizer.get_mesh_planar_normal_or_plane(pl1=True,pln=True)
+            # data = sm.face_planarity()
+            # print('max_planarity','%.2g' % np.max(data))
+            # val = 1e-5
+            # showf = Faces(sm,face_data=data,glossy=1,opacity=1,
+            #               color='bwr',lut_range=[-val,val],name=name+'f')           
+            # showe = Edges(sm,color='black',name=name+'e')
+            # self.meshmanager.add([showf,showe])
+            showf = Faces(sm,glossy=0.5,opacity=0.7,
+                          color='black',name=name+'f')           
+            self.meshmanager.add([showf])
+            self.save_new_mesh = sm
+        else:
+            self.meshmanager.remove([name+'e',name+'f'])   
+    @on_trait_change('show_planar_poly2_plane')
+    def plot_polyline2_planar_plane(self):
+        name = 'ply2_pln'
+        if self.show_planar_poly2_plane:  
+            sm= self.optimizer.get_mesh_planar_normal_or_plane(pl2=True,pln=True)
+            # data = sm.face_planarity()
+            # print('max_planarity','%.2g' % np.max(data))
+            # val = 1e-5
+            # showf = Faces(sm,face_data=data,glossy=1,opacity=1,
+            #               color='bwr',lut_range=[-val,val],name=name+'f')           
+            # showe = Edges(sm,color='black',name=name+'e')
+            # self.meshmanager.add([showf,showe])
+            showf = Faces(sm,glossy=0.5,opacity=0.9,
+                          color='yellow',name=name+'f')           
+            self.meshmanager.add([showf])
+            self.save_new_mesh = sm
+            #sm.make_obj_file(name)
+        else:
+            self.meshmanager.remove([name+'e',name+'f'])    
+    #--------------------------------------------------------------------------
+    #                        Error Plotting
+    #--------------------------------------------------------------------------     
+    @on_trait_change('show_isometric_edge_errors')
+    def plot_isometric_edge_errors(self):
+        name = 'iso_e_err'
+        if self.show_isometric_edge_errors:
+            V = self.mesh.vertices
+            vi, vj = self.mesh.vertex_ring_vertices_iterators(order=True)
+            Vl,Vr = V[vi],V[vj]
+            pl1 = make_polyline_from_endpoints(Vl,Vr)
+            
+            data = self.optimizer.isometry_error()
+            e = 1e-2
+            #e = np.max(np.abs(data)) * 10
+            self.meshmanager.plot_polyline(polyline=pl1,edge_data = data,
+                                            glossy=1,
+                                            tube_radius=1*self.meshmanager.r,
+                                            color='blue-red',
+                                            lut_range = [0,e],
+                                            name=name+'1')  
+            
+            # v,va,vb,vc,vd = self.mesh.rr_star_corner
+            # if self.set_another_poly:
+            #     vl,vr = np.r_[vb,v],np.r_[v,vd]
+            # else:
+            #     vl,vr = np.r_[va,v],np.r_[v,vc]
+            # Vl,Vr = V[vl],V[vr]    
+            # pl2 = make_polyline_from_endpoints(Vl,Vr)
+            # data = self.optimizer.isometry_selected_edges_error()
+            # e = 1e-2
+            # #e = np.max(np.abs(data)) * 10
+            # self.meshmanager.plot_polyline(polyline=pl2,edge_data = data,
+            #                                 glossy=1,
+            #                                 tube_radius=1*self.meshmanager.r,
+            #                                 color='blue-red',
+            #                                 lut_range = [0,e],
+            #                                 name=name+'2')  
+
+        else:
+            self.meshmanager.remove([name+'1',name+'2'])
     #--------------------------------------------------------------------------
     #                         Printing / Check
     #--------------------------------------------------------------------------         
@@ -1638,6 +1763,8 @@ class DOINet(GeolabComponent):
         self.optimizer.oscu_rrv_tangent = self.oscu_rrv_tangent
         self.optimizer.orient_rrv_normal = self.orient_rrv_normal
         
+        self.optimizer.set_weight('planarity', self.planarity)
+        
         self.optimizer.set_weight('orthogonal',  self.orthogonal*1)
         self.optimizer.set_weight('DGPC', self.GPC_net)
         
@@ -1668,6 +1795,10 @@ class DOINet(GeolabComponent):
         self.optimizer.is_GO_or_OG = self.switch_GO_or_OG 
         self.optimizer.is_diag_or_ctrl = self.switch_diag_or_ctrl
         self.optimizer.is_Kite_switch = self.switch_kite_1_or_2
+        
+        self.optimizer.set_weight('isometry',  self.isometry)
+        self.optimizer.set_weight('isometry_checkboard',  self.isometry_checkboard)
+        
 
     # -------------------------------------------------------------------------
     #                         Reset + Optimization

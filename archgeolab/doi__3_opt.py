@@ -15,14 +15,15 @@ from geometrylab.optimization.guidedprojectionbase import GuidedProjectionBase
 
 from geometrylab.geometry.circle import circle_three_points
 
-from archgeolab.constraints.constraints_basic import con_planarity_constraints
+from archgeolab.constraints.constraints_basic import column3D,con_planarity_constraints
 
 from archgeolab.constraints.constraints_fairness import con_fairness_4th_different_polylines
 
 from archgeolab.constraints.constraints_net import con_unit_edge,con_orient_rr_vn,\
     con_osculating_tangents,con_GOnet,con_Gnet,con_CGC,\
     con_orthogonal_midline,con_Anet,con_Snet,con_DOI,con_DOI__freeform,\
-    con_Kite,con_Pnet
+    con_Kite,con_Pnet, con_isometry, con_isometry_checkboard,\
+    con_planar_1familyof_polylines
     
 from archgeolab.constraints.constraints_glide import con_glide_in_plane,\
     con_alignment,con_alignments,con_selected_vertices_glide_in_one_plane,\
@@ -49,6 +50,8 @@ class GP_DOINet(GuidedProjectionBase):
     
     _N5 = 0
     
+    _N7 = 0
+    
     _Noscut = 0
     _Norient = 0
     _Ncgc = 0
@@ -60,6 +63,8 @@ class GP_DOINet(GuidedProjectionBase):
     _Nps2 = 0
     _Nps_orient1 = 0
     _Nps_orient2 = 0
+    
+    _Nppq=_Nppo = 0
 
     def __init__(self):
         GuidedProjectionBase.__init__(self)
@@ -93,6 +98,13 @@ class GP_DOINet(GuidedProjectionBase):
         'Snet_constR' : 0,
 
         'Pnet' :0,
+        
+        ##transformation:
+        'isometry' : 0,
+        'isometry_checkboard' : 0,
+        
+        'planar_ply1' : 0,
+        'planar_ply2' : 0,
 
         ##Note: below from geometrylab/optimization/Guidedprojection.py:
         'fixed_vertices' : 1,
@@ -100,7 +112,6 @@ class GP_DOINet(GuidedProjectionBase):
         'fixed_corners' : 0,
 
         'gliding' : 0, # Huinote: glide on boundary, used for itself boundary
-        
         }
 
         self.add_weights(weights)
@@ -139,7 +150,10 @@ class GP_DOINet(GuidedProjectionBase):
 
         self.is_pseudogeo_rectify_dvlp = False ## no use
         self.data_pseudogeodesic_binormal = None #=[an,oN1,oN2,cos13,cos24]
-
+        
+        ##isometric transformation
+        self.set_another_polyline = 0
+        self._ver_poly_strip1,self._ver_poly_strip2 = None,None
     #--------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------
@@ -171,6 +185,12 @@ class GP_DOINet(GuidedProjectionBase):
                    self.get_weight('Pnet'),
                    self.get_weight('Anet'),
                    self.get_weight('Snet'),
+                   
+                   self.get_weight('isometry'),
+                   self.get_weight('isometry_checkboard'),
+                   
+                   self.get_weight('planar_ply1'),
+                   self.get_weight('planar_ply2'),
 
                    1)
     @property
@@ -206,6 +226,28 @@ class GP_DOINet(GuidedProjectionBase):
     @glide_reference_polyline.setter
     def glide_reference_polyline(self,polyline):
         self._glide_reference_polyline = polyline        
+        
+
+    @property
+    def ver_poly_strip1(self):
+        if self._ver_poly_strip1 is None:
+            ##below for the planar polyline case:
+            # if self.get_weight('planar_ply1') or self.opt_AG_const_rii or \
+            #     self.get_weight('torsionfree_strip1'):
+            #         self.index_of_mesh_polylines()
+            # else:
+            #     self.index_of_strip_along_polyline()
+            self._ver_poly_strip1 = self.mesh.all_rr_polylist[0][0]
+        return self._ver_poly_strip1  
+    
+    @property
+    def ver_poly_strip2(self):
+        if self._ver_poly_strip2 is None:
+            ##below for the planar polyline case:
+            # if self.get_weight('planar_ply2') or self.get_weight('torsionfree_strip2'):
+            #     self.index_of_mesh_polylines()
+            self._ver_poly_strip2 = self.mesh.all_rr_polylist[1][0]
+        return self._ver_poly_strip2  
 
     #--------------------------------------------------------------------------
     #                               Initialization
@@ -222,7 +264,7 @@ class GP_DOINet(GuidedProjectionBase):
         V = self.mesh.V
         F = self.mesh.F
         N = 3*V
-        N1 = N2 = N3 = N4 = N5 = N
+        N1 = N2 = N3 = N4 = N5 = N7 = N
         
         if self.is_diag_or_ctrl:
             v0,v1,v2,v3,v4 = self.mesh.rr_star_corner
@@ -238,6 +280,8 @@ class GP_DOINet(GuidedProjectionBase):
         Nsnet = Ns_n = Ns_r = N
         
         Nps1 = Nps2 = Nps_orient1 = Nps_orient2 = N
+        
+        Nppq=Nppo = N
 
         #---------------------------------------------
         if self.get_weight('planarity') != 0:
@@ -324,7 +368,24 @@ class GP_DOINet(GuidedProjectionBase):
             #if self.is_pseudogeo_orient:
             N += num_cos + num_rrstar
             Nps_orient2 = N
+            
+        #---------------------------------------------
+        if self.get_weight('isometry_checkboard'):
+            "ld1,ld2,ud1,ud2"
+            N += (1+1+3+3)*self.mesh.num_quadface
+            N7 = N
 
+        if self.get_weight('planar_ply1'):
+            N += 3*len(self.ver_poly_strip1)
+            ## only for \obj_cheng\every_5_PPQ.obj'
+            ##matrix = self.ver_poly_strip1
+            #matrix = self.mesh.rot_patch_matrix[:,::5].T
+            #N += 3*len(matrix)
+            Nppq = N
+        if self.get_weight('planar_ply2'):
+            N += 3*len(self.ver_poly_strip2)
+            Nppo = N   
+                    
         #---------------------------------------------
         if N1 != self._N1 or N2 != self._N2:
             self.reinitialize = True
@@ -334,6 +395,9 @@ class GP_DOINet(GuidedProjectionBase):
             self.mesh.reinitialize_densities()
 
         if N5 != self._N5:
+            self.reinitialize = True
+            
+        if N7 != self._N7:
             self.reinitialize = True
             
         if Noscut != self._Noscut:
@@ -359,6 +423,11 @@ class GP_DOINet(GuidedProjectionBase):
             self.reinitialize = True  
         if Nps_orient2 != self._Nps_orient2:
             self.reinitialize = True  
+            
+        if Nppq != self._Nppq:
+            self.reinitialize = True
+        if Nppo != self._Nppo:
+            self.reinitialize = True
 
         #----------------------------------------------
         self._N = N
@@ -367,6 +436,7 @@ class GP_DOINet(GuidedProjectionBase):
         self._N3 = N3
         self._N4 = N4
         self._N5 = N5
+        self._N7 = N7
         self._Noscut = Noscut        
         self._Norient = Norient
         self._Ncgc = Ncgc
@@ -377,6 +447,9 @@ class GP_DOINet(GuidedProjectionBase):
         self._Nps2 = Nps2
         self._Nps_orient1 = Nps_orient1
         self._Nps_orient2 = Nps_orient2
+        
+        self._Nppq = Nppq
+        self._Nppo = Nppo
         
         self.build_added_weight() # Hui add
         
@@ -479,7 +552,18 @@ class GP_DOINet(GuidedProjectionBase):
             #"vn*on2=cos2=a2^2;on2*(e1-e3)=b2^2"
             #b = np.sqrt(np.abs(np.einsum('ij,ij->i',oN2,e1-e3)))
             X = np.r_[X,a,b]
-                     
+        
+        #-----------------------
+        if self.get_weight('isometry_checkboard'):
+            ld1,ld2,ud1,ud2 = self.mesh.get_quadface_diagonal()
+            X = np.r_[X,ld1,ld2,ud1.flatten('F'),ud2.flatten('F')]
+        
+        if self.get_weight('planar_ply1'):
+            sn = self.get_poly_strip_normal(pl1=True)
+            X = np.r_[X,sn.flatten('F')]
+        if self.get_weight('planar_ply2'):
+            sn = self.get_poly_strip_normal(pl2=True)
+            X = np.r_[X,sn.flatten('F')]             
         #-----------------------
         
         self._X = X
@@ -566,9 +650,9 @@ class GP_DOINet(GuidedProjectionBase):
             H,r = con_Gnet(self.is_diag_or_ctrl,**self.weights)
             self.add_iterative_constraint(H, r, 'Gnet')   
             
-        # if self.oscu_rrv_tangent: ##CGC, works but no use
-        #     H,r = con_osculating_tangents(self.is_diag_or_ctrl,**self.weights)
-        #     self.add_iterative_constraint(H, r, 'oscu_rrv_tangent')
+        if self.oscu_rrv_tangent: ##CGC, works but no use
+            H,r = con_osculating_tangents(self.is_diag_or_ctrl,**self.weights)
+            self.add_iterative_constraint(H, r, 'oscu_rrv_tangent')
         
         if self.orient_rrv_normal:
             "rr_vn orients samely as Nv"
@@ -666,7 +750,34 @@ class GP_DOINet(GuidedProjectionBase):
         #     H,r = con_Pnet(U1xyz,U2xyz,self.is_diag_or_ctrl,
         #                    is_unique_angle,coss,**self.weights)
         #     self.add_iterative_constraint(H, r, 'Pnet') 
-     
+        
+        ###--------------------------------------------------------------------    
+        if self.get_weight('isometry'):
+            l0 = self.edge_lengths_isometry(initialized=True)
+            H,r = con_isometry(l0,**self.weights)
+            self.add_iterative_constraint(H, r, 'isometry')
+            
+        if self.get_weight('isometry_checkboard'):
+            l01,l02,cos0 = self.face_diagonal(initialized=True)
+            l0 = np.r_[l01,l02]
+            H,r = con_isometry_checkboard(l0, cos0, **self.weights)
+            self.add_iterative_constraint(H, r, 'isometry')
+            
+        
+        if self.get_weight('planar_ply1'):
+            ## only for \obj_cheng\every_5_PPQ.obj'
+            matrix = self.ver_poly_strip1
+            #matrix = self.mesh.rot_patch_matrix[:,::5].T
+            H,r = con_planar_1familyof_polylines(self._Nppq,matrix,
+                                                 is_parallxy_n=False, #TO SET
+                                                 **self.weights)              
+            self.add_iterative_constraint(H, r, 'planar_ply1')
+        if self.get_weight('planar_ply2'):
+            H,r = con_planar_1familyof_polylines(self._Nppo,self.ver_poly_strip2,
+                                                 is_parallxy_n=False, #TO SET
+                                                 **self.weights)              
+            self.add_iterative_constraint(H, r, 'planar_ply2')   
+        
         ###--------------------------------------------------------------------                
    
         self.is_initial = False   
@@ -684,6 +795,7 @@ class GP_DOINet(GuidedProjectionBase):
         self.add_weight('N3', self._N3)
         self.add_weight('N4', self._N4)
         self.add_weight('N5', self._N5)
+        self.add_weight('N7', self._N7)
         
         self.add_weight('Noscut', self._Noscut)
         self.add_weight('Norient', self._Norient)
@@ -698,6 +810,8 @@ class GP_DOINet(GuidedProjectionBase):
         self.add_weight('Nps_orient1', self._Nps_orient1)
         self.add_weight('Nps_orient2', self._Nps_orient2)
 
+        self.add_weight('Nppq', self._Nppq)
+        self.add_weight('Nppo', self._Nppo)
 
     def build_constant_constraints(self): #copy from guidedprojection,need to check if it works 
         self.add_weight('N', self.N)
@@ -1249,6 +1363,163 @@ class GP_DOINet(GuidedProjectionBase):
             sm2 = get_strip_from_rulings(an2[ind2],n2[ind2],arr2,is_smooth,is_even_selection)
             return sm1,arr1,sm2,arr2
 
+
+    def get_poly_strip_normal(self,pl1=False,pl2=False):
+        "for planar strip: each strip 1 normal as variable, get mean n here"
+        V = self.mesh.vertices
+        
+        if pl1:
+        #if self.get_weight('planar_ply1'):
+            iall = self.ver_poly_strip1
+            ## only for \obj_cheng\every_5_PPQ.obj'
+            ##matrix = self.ver_poly_strip1
+            #iall = self.mesh.rot_patch_matrix[:,::5].T
+        elif pl2:
+            iall = self.ver_poly_strip2    
+        else:
+            iall = self.ver_poly_strip1[0]    
+        n = np.array([0,0,0])
+        for iv in iall:
+            if len(iv)==2:
+                ni = np.array([(V[iv[1]]-V[iv[0]])[1],-(V[iv[1]]-V[iv[0]])[0],0]) # random orthogonal normal
+            elif len(iv)==3:
+                vl,v0,vr = iv[0],iv[1],iv[2]
+                ni = np.cross(V[vl]-V[v0],V[vr]-V[v0])
+            else:
+                vl,v0,vr = iv[:-2],iv[1:-1],iv[2:]
+                ni = np.cross(V[vl]-V[v0],V[vr]-V[v0])
+                ni = ni / np.linalg.norm(ni,axis=1)[:,None]
+                ni = np.mean(ni,axis=0)
+            ni = ni / np.linalg.norm(ni)
+            n = np.vstack((n,ni))
+        return n[1:,:]
+
+    def index_of_strip_along_polyline(self):
+        "ver_poly_strip1: 2-dim list with different length, at least 2"
+        d = self.set_another_polyline
+        if False:
+            iall,iind,_,_ = self.mesh.get_diagonal_vertex_list(5,d) # interval is random
+        else:
+            iall,iind,_,_ = self.mesh.get_isoline_vertex_list(5,d) # updated, need to check
+        self._ver_poly_strip1 = [iall,iind]   
+
+    def index_of_mesh_polylines(self):
+        "index_of_strip_along_polyline without two bdry vts, this include full"
+        #if self.is_singular:
+            #self._ver_poly_strip1,_,_ = quadmesh_with_1singularity(self.mesh)
+        #else:
+        "ver_poly_strip1,ver_poly_strip2"
+        iall = self.mesh.get_both_isopolyline(diagpoly=False, #self.switch_diagmeth,
+                                              is_one_or_another=self.set_another_polyline)
+        self._ver_poly_strip1 = iall   
+        iall = self.mesh.get_both_isopolyline(diagpoly=False, #self.switch_diagmeth,
+                                              is_one_or_another=not self.set_another_polyline)
+        self._ver_poly_strip2 = iall    
+        
+    def get_mesh_planar_normal_or_plane(self,pl1=False,pl2=False,pln=False,scale=None):
+        V = self.mesh.vertices
+        if pl1:
+            iall = self.ver_poly_strip1
+            ## only for \obj_cheng\every_5_PPQ.obj'
+            ##matrix = self.ver_poly_strip1
+            #iall = self.mesh.rot_patch_matrix[:,::5].T
+        elif pl2:
+            iall = self.ver_poly_strip2    
+        else:
+            iall = self.ver_poly_strip1[0]    
+        num = len(iall)
+        
+        if not pln:
+            an=vn = np.array([0,0,0])
+            i= 0
+            for iv in iall:
+                vl,v0,vr = iv[:-2],iv[1:-1],iv[2:]
+                an = np.vstack((an,V[iv]))
+                if pl1: #self.get_weight('planar_ply1'):
+                    nx = self.X[self._Nppq-3*num+i]
+                    ny = self.X[self._Nppq-2*num+i]
+                    nz = self.X[self._Nppq-1*num+i]
+                    ni = np.tile(np.array([nx,ny,nz]),len(iv)).reshape(-1,3) 
+                elif pl2: #self.get_weight('planar_ply2'):
+                    nx = self.X[self._Nppo-3*num+i]
+                    ny = self.X[self._Nppo-2*num+i]
+                    nz = self.X[self._Nppo-1*num+i]
+                    ni = np.tile(np.array([nx,ny,nz]),len(iv)).reshape(-1,3)     
+                else:
+                    "len(an)=len(ni)=len(iv)-2"
+                    an = np.vstack((an,V[v0]))
+                    ni = np.cross(V[vl]-V[v0],V[vr]-V[v0])
+                    ni = ni / np.linalg.norm(ni,axis=1)[:,None]
+                    
+                vn = np.vstack((vn,ni))
+                i+= 1
+            return an[1:,:],vn[1:,:]
+        else:
+            "planar strip passing through ply-vertices with above uninormal"
+            P1=P2=P3=P4 = np.array([0,0,0])
+            i= 0
+            for iv in iall:
+                vl,vr = iv[:-1],iv[1:]
+                vec = V[vr]-V[vl]
+                vec = np.vstack((vec,vec[-1])) #len=len(iv)
+                if scale is None:
+                    scale = np.mean(np.linalg.norm(vec,axis=1)) * 0.4
+                if pl1: #self.get_weight('planar_ply1'):
+                    nx = self.X[self._Nppq-3*num+i]
+                    ny = self.X[self._Nppq-2*num+i]
+                    nz = self.X[self._Nppq-1*num+i]
+                    oni = np.array([nx,ny,nz])
+                    Ni = np.cross(vec,oni)
+                elif pl2: #self.get_weight('planar_ply2'):
+                    nx = self.X[self._Nppo-3*num+i]
+                    ny = self.X[self._Nppo-2*num+i]
+                    nz = self.X[self._Nppo-1*num+i]
+                    oni = np.array([nx,ny,nz])
+                    Ni = np.cross(vec,oni)
+                else:
+                    il,i0,ir = iv[:-2],iv[1:-1],iv[2:]
+                    oni = np.cross(V[il]-V[i0],V[ir]-V[i0])
+                    oni = np.vstack((oni[0],oni,oni[-1])) #len=len(iv)
+                    oni = oni / np.linalg.norm(oni,axis=1)[:,None]
+                    Ni = np.cross(vec,oni)
+                uNi = Ni / np.linalg.norm(Ni,axis=1)[:,None] * scale  
+                i+= 1  
+                ###need to check
+                #an,anvn = V[vl]-uNi[:-1],V[vr]-uNi[1:]
+                an,anvn = V[vl]+uNi[:-1],V[vr]+uNi[1:]
+                P1,P2 = np.vstack((P1,V[vl])),np.vstack((P2,V[vr])) ## or an,anvn
+                P4,P3 = np.vstack((P4,an)),np.vstack((P3,anvn))
+            
+            from archgeolab.archgeometry.getGeometry import make_quad_mesh_pieces
+            pm = make_quad_mesh_pieces(P1[1:],P2[1:],P3[1:],P4[1:])   
+            return pm
+
+    #--------------------------------------------------------------------------
+    #                                  Results
+    #--------------------------------------------------------------------------
+
+
+    def face_diagonal(self,initialized=False):
+        if self.get_weight('isometry_checkboard') == 0:
+            return None
+        if initialized:
+            X = self._X0
+        else:
+            X = self.X
+        vi = self.mesh.quadface
+        v1,v2,v3,v4 = vi[::4],vi[1::4],vi[2::4],vi[3::4]
+        V = X[:3*self.mesh.V].reshape(-1,3,order='F')
+        V1,V2,V3,V4 = V[v1], V[v2], V[v3], V[v4]
+        d1, d2 = V1-V3, V2-V4
+        ld1,ld2 = np.linalg.norm(d1,axis=1), np.linalg.norm(d2,axis=1)
+        ud1 = d1 / ld1[:,None]
+        ud2 = d2 / ld2[:,None]
+        #num = self.mesh.num_quadface
+        #N7 = self._N7
+        #ld1,ld2 = X[N7-8*num:N7-7*num],X[N7-7*num:N7-6*num]
+        #ud1,ud2 = X[N7-6*num:N7-3*num],X[N7-3*num:N7]
+        cos = np.einsum('ij,ij->i',ud1.reshape(-1,3,order='F'), ud2.reshape(-1,3,order='F'))
+        return ld1,ld2,cos  
     
     #--------------------------------------------------------------------------
     #                                Errors strings
@@ -1309,6 +1580,60 @@ class GP_DOINet(GuidedProjectionBase):
         print(name+':[mean,max]=','%.3g'%emean,'%.3g'%emax)
 
 
+    def isometry_error(self):
+        "compare all edge_lengths"
+        if self.get_weight('isometry') == 0:
+            return None
+        L = self.edge_lengths_isometry()
+        L0 = self.edge_lengths_isometry(initialized=True)
+        norm = np.mean(L)
+        Err = np.abs(L-L0) / norm
+        Emean = np.mean(Err)
+        Emax = np.max(Err)
+        self.add_error('isometry', Emean, Emax, self.get_weight('isometry'))
+        return Err
+
+    # def isometry_selected_edges_error(self):
+    #     "only part"
+    #     if self.get_weight('isometry_selected_edges') == 0:
+    #         return None
+    #     _,_,L = self.selected_isometric_edges()
+    #     _,_,L0 = self.selected_isometric_edges(initialized=True)
+    #     norm = np.mean(L)
+    #     Err = np.abs(L-L0) / norm
+    #     #Emean = np.mean(Err)
+    #     #Emax = np.max(Err)
+    #     #self.add_error('isometry(select)', Emean, Emax, self.get_weight('isometry_selected_edges'))        
+    #     return Err
+        
+    def edge_lengths_isometry(self, initialized=False): # Hui
+        "isometry: keeping all edge_lengths"
+        if self.get_weight('isometry') == 0:
+            return None
+        if initialized:
+            X = self._X0
+        else:
+            X = self.X
+        vi, vj = self.mesh.vertex_ring_vertices_iterators(order=True) # later should define it as global
+        Vi = X[column3D(vi,0,self.mesh.V)].reshape(-1,3,order='F')
+        Vj = X[column3D(vj,0,self.mesh.V)].reshape(-1,3,order='F')
+        el = np.linalg.norm(Vi-Vj,axis=1)
+        return el  
+
+    def isometry_checkboard_error(self):
+        if self.get_weight('isometry_checkboard') == 0:
+            return None
+        l1,l2,cos = self.face_diagonal()
+        l01,l02,cos0 = self.face_diagonal(initialized=True)
+        norm1, norm2 = np.mean(l1), np.mean(l2)
+        Err1 = np.abs(l1-l01) / norm1
+        Err2 = np.abs(l2-l02) / norm2
+        Err3 = np.abs(cos-cos0)
+        Err = Err1+Err2+Err3 # maybe later seperate to represent
+        Emean = np.mean(Err)
+        Emax = np.max(Err)
+        self.add_error('isometry_checkboard', Emean, Emax, self.get_weight('isometry_checkboard'))
+
 
     def planarity_error_string(self):
         return self.error_string('planarity')
@@ -1318,3 +1643,9 @@ class GP_DOINet(GuidedProjectionBase):
     
     def anet_error_string(self):
         return self.error_string('Anet')
+    
+    def isometry_error_string(self):
+        return self.error_string('isometry')
+    
+    def isometry_checkboard_error_string(self):
+        return self.error_string('isometry_checkboard')

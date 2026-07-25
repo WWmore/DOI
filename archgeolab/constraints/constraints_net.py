@@ -16,7 +16,7 @@ from archgeolab.constraints.constraints_basic import column3D,con_edge,\
     con_equal_opposite_angle,con_dependent_vector,con_cross,\
     con_orient,con_ortho,con_circle,\
     con_constangle2,con_constangle3,con_positive,con_orient2,\
-    con_oriented_vectors,con_equal
+    con_oriented_vectors,con_equal, con_constangle
     #con_orthogonal_2vectors,con_negative,con_diagonal2,con_orient1
     # con_unique_angle1,con_unique_angle3,con_const_angle_cos1,con_const_angle_sin1,\
     # con_multiply,con_unit_decomposition
@@ -1164,7 +1164,128 @@ def con_pseudogeodesic_pattern(name,is_diagnet=False,is_orient=True,
     #print('err:', np.sum(np.square((H*X)-r)))
     return H*w,r*w
 
+    #--------------------------------------------------------------------------
+    #                      polylines:
+    #-------------------------------------------------------------------------- 
+def con_isometry_edges(X,c_vi,c_vj,l0):
+    "(Vi-Vj)^2 = l0^2; (l0 are const. numbers)"
+    num = len(l0)
+    data1 = X[c_vi]
+    data2 = X[c_vj]
+    col = np.r_[c_vi, c_vj]
+    data = 2*np.r_[data1-data2, data2-data1]
+    row = np.tile(np.arange(num),6)
+    r = np.linalg.norm((data1-data2).reshape(-1,3,order='F'),axis=1)**2 + l0**2
+    H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
+    return H,r
+
+def con_isometry(l0,**kwargs):
+    """
+    keep all edge-lengths; no new variables
+    (Vi-Vj)^2 = l0^2
+    """
+    w = kwargs.get('isometry')
+    mesh = kwargs.get('mesh')
+    X = kwargs.get('X')
+    V = mesh.V
+    vi, vj = mesh.vertex_ring_vertices_iterators(order=True)
+    c_vi = column3D(vi,0,V)
+    c_vj = column3D(vj,0,V)
+    H,r = con_isometry_edges(X,c_vi,c_vj,l0)
+    return H*w, r*w
+
+def con_isometry_checkboard(l0,angle0,**kwargs):
+    """
+    keep 2 kinds of diagonal edge-lengths and their crossing angle
+    X += [ld1,ld2, ud1,ud2]
+    1. (v1-v3) = ld1*ud1, ud1**2=1
+    2. (v2-v4) = ld2*ud2, ud2**2=1
+    3. ld1 == init_ld1, ld2 == init_ld2
+    4. ud1*ud2 == init_ud1*init_ud2
+    """
+    w = kwargs.get('isometry_checkboard')
+    mesh = kwargs.get('mesh')
+    X = kwargs.get('X')
+    N7 = kwargs.get('N7')
+    V = mesh.V
+    num = mesh.num_quadface
+    numl = N7-8*num
+    numud = N7-6*num
+    arr = np.arange(num)
+
+    c_ld1 = numl+arr
+    c_ld2 = numl+num+arr
+    vi = mesh.quadface
+    v1,v2,v3,v4 = vi[::4],vi[1::4],vi[2::4],vi[3::4]
+    c_v1 = np.r_[v1,V+v1,2*V+v1] # [x,y,z]
+    c_v2 = np.r_[v2,V+v2,2*V+v2] # [x,y,z]
+    c_v3 = np.r_[v3,V+v3,2*V+v3] # [x,y,z]
+    c_v4 = np.r_[v4,V+v4,2*V+v4] # [x,y,z]
+    c_ud1 = np.r_[numud+arr,numud+num+arr,numud+2*num+arr]
+    c_ud2 = c_ud1+3*num
+
+    He1,re1 = con_edge(X,c_v1,c_v3,c_ld1,c_ud1)
+    He2,re2 = con_edge(X,c_v2,c_v4,c_ld2,c_ud2)
+    Hu1,ru1 = con_unit(X,c_ud1)
+    Hu2,ru2 = con_unit(X,c_ud2)
+    Hl1,rl1 = con_constl(c_ld1,l0[:num],len(X))
+    Hl2,rl2 = con_constl(c_ld2,l0[num:],len(X))
+    Ha,ra = con_constangle(X,c_ud1,c_ud2,angle0)
+
+    H = sparse.vstack((He1,He2,Hu1,Hu2,Hl1,Hl2,Ha))
+    r = np.r_[re1,re2,ru1,ru2,rl1,rl2,ra]
+    return H*w,r*w      
+
+
+def con_planar_1familyof_polylines(Npp,ver_poly_strip,is_parallxy_n=False,**kwargs):
+    """ refer: _con_agnet_planar_geodesic(ver_poly_strip,strong=True,**kwargs)
+    X +=[ni]
+    along each i-th polyline: ni * (vij-vik) = 0; k=j+1,j=0,...
+    refer: self.get_poly_strip_normal()
+    """
+    mesh = kwargs.get('mesh')
+    X = kwargs.get('X')
+    N = kwargs.get('N')
+    ##Npp = kwargs.get('Nppq')
+
+    iall = ver_poly_strip
+    num = len(iall)
+    arr = Npp-3*num+np.arange(3*num)
+    c_nx,c_ny,c_nz = arr[:num],arr[num:2*num],arr[2*num:3*num]
+
+    col=row=data=r = np.array([])
+    k,i = 0,0
+    for iv in iall:
+        va,vb = iv[:-1],iv[1:]
+        m = len(va)
+        c_a = column3D(va,0,mesh.V)
+        c_b = column3D(vb,0,mesh.V)
+        c_ni = np.r_[np.tile(c_nx[i],m),np.tile(c_ny[i],m),np.tile(c_nz[i],m)]
+        coli = np.r_[c_a,c_b,c_ni]
+        rowi = np.tile(np.arange(m),9) + k
+        datai = np.r_[X[c_ni],-X[c_ni],X[c_a]-X[c_b]]
+        ri = np.einsum('ij,ij->i',X[c_ni].reshape(-1,3,order='F'),(X[c_a]-X[c_b]).reshape(-1,3,order='F'))
+        col = np.r_[col,coli]
+        row = np.r_[row,rowi]
+        data = np.r_[data,datai]
+        r = np.r_[r,ri]
+        k += m
+        i += 1
+    H = sparse.coo_matrix((data,(row,col)), shape=(k, N))
+    H1,r1 = con_unit(X,arr)
+    H = sparse.vstack((H,H1))
+    r = np.r_[r,r1]
     
+    if is_parallxy_n:
+        "variable normals are parallel to xy plane: n[2]=0"
+        row = np.arange(num)
+        data = np.ones(num)
+        col = c_nz
+        r0 = np.zeros(num)
+        H0 = sparse.coo_matrix((data,(row,col)), shape=(num, N))  
+        H = sparse.vstack((H,H0))
+        r = np.r_[r,r0]
+    return H,r  
 
     #--------------------------------------------------------------------------
     #                      rulings:
