@@ -53,7 +53,7 @@ def con_unit_edge(is_diagnet=False,is_rrvstar=True,**kwargs):
     if is_diagnet:
         v,v1,v2,v3,v4 = mesh.rr_star_corner 
     elif is_rrvstar:
-        v,v1,v2,v3,v4 = mesh.rrv4f4
+        v,v1,v2,v3,v4 = mesh.rr_star.T #.rrv4f4 ##Hui update
     else:
         #v,v1,v2,v3,v4 = mesh.ver_regular_star.T # default angle=90, non-orient
         v,v1,v2,v3,v4 = mesh.ver_star_matrix.T # oriented
@@ -105,7 +105,7 @@ def con_osculating_tangents(is_diagnet=False,**kwargs):
         c_3 = column3D(vc,0,mesh.V)
         c_4 = column3D(vd,0,mesh.V)
     else:
-        v,v1,v2,v3,v4 = mesh.rrv4f4
+        v,v1,v2,v3,v4 = mesh.rr_star.T #.rrv4f4 ##Hui update
         c_v = column3D(v,0,mesh.V)
         c_1 = column3D(v1,0,mesh.V)
         c_2 = column3D(v2,0,mesh.V)
@@ -139,9 +139,9 @@ def con_orient_rr_vn(is_osculating_tangent=False,**kwargs):
     X = kwargs.get('X')
     N5 = kwargs.get('N5')
     Norient = kwargs.get('Norient')
-    v = mesh.ver_rrv4f4
+    v = mesh.ver_rrv #ver_rrv4f4 #hui update
     Nv = mesh.vertex_normals()[v]
-    num = len(v) ##= mesh.num_rrv4f4
+    num = len(v)
     arr,arr3 = np.arange(num),np.arange(3*num)
     c_n = arr3 + Norient-4*num
     c_a = arr + Norient-num
@@ -340,7 +340,7 @@ def con_DOI__freeform(is_GO_or_OG=True,is_SIR=False,
 
     def con_equal_polysegment(is_poly1_or_2=True):
         "along one family of polylines, the segments are equal; for SIR"
-        v,v1,v2,v3,v4 = mesh.rrv4f4
+        v,v1,v2,v3,v4 = mesh.rr_star.T #.rrv4f4 ##Hui update
         c_v = column3D(v,0,V)
         c_v1 = column3D(v1,0,V)
         c_v2 = column3D(v2,0,V)
@@ -408,7 +408,7 @@ def con_GOnet(is_GO_or_OG=True,is_rrvstar=True,**kwargs):
     N5 = kwargs.get('N5')
     
     if is_rrvstar: ##True 
-        num=mesh.num_rrv4f4
+        num= len(mesh.ver_rrv) #mesh.num_rrv4f4 hui update
     else:
         num = mesh.num_regular
         
@@ -626,7 +626,7 @@ def con_CGC(is_diagnet=False,is_uniq_rho=False,assigned_rho=None,**kwargs):
     if is_diagnet:
         v0,v1,v2,v3,v4 = mesh.rr_star_corner
     else:
-        v0,v1,v2,v3,v4 = mesh.rrv4f4
+        v0,v1,v2,v3,v4 = mesh.rr_star.T #.rrv4f4 ##Hui update
         
     num = len(v0)
     c_v0 = column3D(v0,0,V)
@@ -725,7 +725,7 @@ def con_Gnet(is_diagnet=False,is_rrvstar=True,**kwargs):
     else:
         if is_rrvstar:
             "function same as below:con_gnet_diagnet"
-            num=mesh.num_rrv4f4
+            num= len(mesh.ver_rrv) #mesh.num_rrv4f4 hui update
         else:
             num = mesh.num_regular
             
@@ -769,14 +769,14 @@ def con_Snet(orientrn,is_rrvstar=True,is_diagnet=False,
         if is_diagnet:
             v0,v1,v2,v3,v4 = mesh.rr_star_corner
         else:
-            v0,v1,v2,v3,v4 = mesh.rrv4f4
+            v0,v1,v2,v3,v4 = mesh.rr_star.T #.rrv4f4 ##Hui update
         #orientrn = orientrn[mesh.ind_rr_star_v4f4] ##below should be the same
         ##print(len(mesh.ind_rr_star_v4f4),len(v0))
     else:
         "used in CRPC"
         v0,v1,v2,v3,v4 = mesh.rr_star.T
     
-    numv = len(v0) ##print(numv,mesh.num_rrv4f4)
+    numv = len(v0)
     c_v0 = column3D(v0,0,V)
     c_v1 = column3D(v1,0,V)
     c_v2 = column3D(v2,0,V)
@@ -961,8 +961,7 @@ def con_Anet(is_rrvstar=False,is_diagnet=False,**kwargs):
         v,v1,v2,v3,v4 = mesh.rr_star_corner
     else:
         if is_rrvstar:
-            v,v1,v2,v3,v4 = mesh.rrv4f4
-            #num=mesh.num_rrv4f4
+            v,v1,v2,v3,v4 = mesh.rr_star.T #.rrv4f4 ##Hui update
         else:
             #num = mesh.num_regular
             v,v1,v2,v3,v4 = mesh.ver_regular_star.T
@@ -1042,7 +1041,7 @@ def con_pseudogeodesic_pattern(name,is_diagnet=False,is_orient=True,
         numpl1,numpl2 = mesh.all_rr_diag_polylines_num
         ind1,ind2 = mesh.all_rr_diag_polylines_vstar_order
     else:
-        v,v1,v2,v3,v4 = mesh.rrv4f4
+        v,v1,v2,v3,v4 = mesh.rr_star.T #.rrv4f4 ##Hui update
         numpl1,numpl2 = mesh.all_rr_polylines_num
         ind1,ind2 = mesh.all_rr_polylines_vstar_order
         

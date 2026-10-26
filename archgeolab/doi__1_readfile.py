@@ -49,23 +49,35 @@ if __name__ == '__main__':
     #file = rot +r'/conical1_diagKite.obj'
     #file = rot +r'/chebyshev_sphere.obj'
     
-    file = rot +r'/rot2_unitscale_cut_CNC_seam_pciso2.obj'
-    #file = rot +r'/unduloid_cut_unitscale_CNC_r=2_seam_pciso3.obj'
-    #file = rot +r'/unduloid1_cusp_unitscale_CNC-r=0.25_seam_pciso3.obj'
+    file = r'/Users/hui/Desktop/geometrylab7/obj_davide/pillow_1.obj'
+    file = r'/Users/hui/Desktop/geometrylab7/obj_davide/flower_cmc1.obj'
     
-    #file = rot +r'/crpc/rot_a_pos_50_crpc_uv_seam.obj'
-    #file = rot +r'/crpc/rot_a_pos_1_crpc_uv_seam.obj'
+    ###CGC:
+        
+        
+    ### ANET:
+    #file = rot +r'/pseudosphere_unitscale_seam_pciso1.obj'
+    #file = rot +r'/crpc/rot_a_minus_50_crpc_uv_seam_pciso1.obj'
+    # file = rot +r'/crpc/rot_a_minus_1_crpc_uv_seam.obj'
+    #file = rot +r'/crpc/rot_a_minus_5_crpc_uv_seam_pciso1.obj'
+        
+    ### SNET:
+    #file = rot +r'/crpc/rot_a_pos_50_crpc_uv_seam_pciso1.obj'
+    #file = rot +r'/crpc/rot_a_pos_1_crpc_uv_seam_pciso1.obj'
     #file = rot +r'/crpc/rot_a_pos_5_crpc_uv_seam_pciso2.obj'
     
-    #file = rot +r'/pseudosphere_unitscale_seam_pciso1.obj'
-    # file = rot +r'/crpc/rot_a_minus_50_crpc_uv_seam.obj'
-    # file = rot +r'/crpc/rot_a_minus_1_crpc_uv_seam.obj'
-    # file = rot +r'/crpc/rot_a_minus_5_crpc_uv_seam_pciso1.obj'
+    
+    ### CNC: 
+    #file = rot +r'/rot2_unitscale_cut_CNC_seam_pciso1.obj'
+    #file = rot +r'/unduloid_cut_unitscale_CNC_r=2_seam_pciso3.obj'
+    #file = rot +r'/unduloid1_cusp_unitscale_CNC-r=0.25_seam_pciso3.obj'
     
     
     #file = rot +r'/rot2_unitscale_cut_CNC.obj'
     #file = rot +r'/unduloid1_2cusps.obj'
     #file = rot +r'/unduloid_cut_unitscale.obj'
+    
+    
     
     # file = rot +r'/pseudosphere_unitscale.obj'
     # reffile = rot +r'/pseudosphere_unitscale_sub2.obj'

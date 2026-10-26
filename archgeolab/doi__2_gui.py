@@ -231,6 +231,8 @@ class DOINet(GeolabComponent):
     
     show_isometric_edge_errors=Bool(label='isoErr')
     
+    show_doi_geodesic_errors = Bool(label='doiErr')
+    
     #show_planar_poly1_normal = Bool(label='Ply1-N')
     show_planar_poly1_plane= Bool(label='Ply1-Pln')
     #show_planar_poly2_normal = Bool(label='Ply2-N')
@@ -333,6 +335,8 @@ class DOINet(GeolabComponent):
                   HGroup('show_isometric_edge_errors',
                          'show_planar_poly1_plane',
                          'show_planar_poly2_plane',),
+                  
+                  HGroup('show_doi_geodesic_errors'),
                   # HGroup(Item('interactive',
                   #             tooltip='InteractiveOptimization',),
                   #        Item('_'),
@@ -1540,7 +1544,6 @@ class DOINet(GeolabComponent):
 
     @on_trait_change('show_isolinestrip_unroll')
     def plot_1st_or_2nd_rectifyingDevelopableSrf_unrolling(self):
-        from archgeolab.archgeometry.unroll import unroll_multiple_strips
         dist = self.mesh.mean_edge_length() * 0.5#self.scale_dist_offset
         width = self.strip_width * dist
         name = 'ps-R2D'
@@ -1564,6 +1567,7 @@ class DOINet(GeolabComponent):
             
 
             if self.is_both:
+                from archgeolab.archgeometry.unroll import unroll_multiple_strips
                 sm,lists, clr, name1 = sm1,list1, (240,114,114), name+'1'
                 um = unroll_multiple_strips(sm,lists,dist,
                                             step=self.dist_inverval,coo=2,
@@ -1592,15 +1596,27 @@ class DOINet(GeolabComponent):
                 else:
                     sm,lists, clr, name = sm2,list2, 'yellow', name+'2'
                     
-                um = unroll_multiple_strips(sm,lists,dist,
-                                            step=self.dist_inverval,coo=2,
-                                            anchor=0,efair=self.set_unroll_strip_fairness,
-                                            itera=100,
-                                            is_midaxis=self.is_unroll_midaxis,
-                                            w_straight=self.set_unroll_strip_fairness)
+                from archgeolab.archgeometry.unroll import unroll_multiple_strips1,unroll_multiple_strips2
+                if dist==0:
+                    um,an = unroll_multiple_strips1(sm,lists,dist,
+                                                step=self.dist_inverval,coo=2,
+                                                anchor=0,efair=self.set_unroll_strip_fairness,
+                                                itera=100,
+                                                is_midaxis=self.is_unroll_midaxis,
+                                                w_straight=self.set_unroll_strip_fairness)
+                else:
+                    um = unroll_multiple_strips2(sm,lists,dist,
+                                                step=self.dist_inverval,coo=2,
+                                                anchor=0,efair=self.set_unroll_strip_fairness,
+                                                itera=100,
+                                                is_midaxis=self.is_unroll_midaxis,
+                                                w_straight=self.set_unroll_strip_fairness)
                 showf = Faces(um,color=clr,name=name+'f') 
                 showe = Edges(um,color=clr,name=name+'e')
-                self.meshmanager.add([showf,showe])
+                self.meshmanager.add([showe])
+                self.meshmanager.plot_glyph(points=an,
+                                            radius=2*self.meshmanager.r,
+                                            color = 'r',name=name)   
                 self.save_new_mesh, self.label = um, name
         else:
             self.meshmanager.remove([name+'1e',name+'1f',name+'2e',name+'2f'])                 
@@ -1684,6 +1700,24 @@ class DOINet(GeolabComponent):
 
         else:
             self.meshmanager.remove([name+'1',name+'2'])
+            
+    @on_trait_change('show_doi_geodesic_errors')
+    def plot_doi_geodesic_errors(self):
+        name = 'doi_g_err'
+        if self.show_doi_geodesic_errors:
+            V0, Nv, No, cos = self.optimizer.get_geodesic_curve_normals()
+            upper = 5 #max_cos=0.01, np.arccos(0.01)/np.pi*180
+            r = self.meshmanager.r
+            self.meshmanager.plot_glyph(points=V0,vertex_data=cos,
+                                        color='blue-red',lut_range=[0, upper],#'0:+',
+                                        radius=5*r,name=name+'1')
+            self.meshmanager.plot_vectors(anchor=V0,vectors=Nv,position='tail',
+                                          color='r', name=name+'2') 
+            self.meshmanager.plot_vectors(anchor=V0,vectors=No,position='tail',
+                                          color='black', name=name+'3') 
+        else:
+            self.meshmanager.remove([name+'1',name+'2',name+'3'])    
+    
     #--------------------------------------------------------------------------
     #                         Printing / Check
     #--------------------------------------------------------------------------         
@@ -1698,7 +1732,7 @@ class DOINet(GeolabComponent):
         
         print('#variables: ', len(self.optimizer.X))
         print('#constraints: ', len(self.optimizer._r))
-        #print('time[s] per iteration: ',  )
+        print('time[s] per iteration: ',  )
 
     @on_trait_change('print_check')
     def print_isogonal_data(self):
@@ -1841,13 +1875,13 @@ class DOINet(GeolabComponent):
 
     @on_trait_change('optimize')
     def optimize_mesh(self):
-        #import time
-        #start_time = time.time()
+        import time
+        start_time = time.time()
         itera = self.itera_run
         self.meshmanager.iterate(self.optimization_step, itera) # note:iterations from gpbase.py
         self.meshmanager.update_plot()
         
-        #print('time[s] per iteration:','%.3g s' %((time.time() - start_time)/itera))
+        print('time[s] per iteration:','%.3g s' %((time.time() - start_time)/itera))
             
     @on_trait_change('interactive')
     def interactive_optimize_mesh(self):

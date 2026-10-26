@@ -269,7 +269,7 @@ class GP_DOINet(GuidedProjectionBase):
         if self.is_diag_or_ctrl:
             v0,v1,v2,v3,v4 = self.mesh.rr_star_corner
         else:
-            v0,v1,v2,v3,v4 = self.mesh.rrv4f4
+            v0,v1,v2,v3,v4 = self.mesh.rr_star.T #self.rrv4f4 ##Hui update
         num_rrstar = len(v0) ##self.mesh.num_rrv4f4
         
         Noscut = N
@@ -907,7 +907,7 @@ class GP_DOINet(GuidedProjectionBase):
         if is_diagnet:
             v0,v1,v2,v3,v4 = self.mesh.rr_star_corner
         else:
-            v0,v1,v2,v3,v4 = self.mesh.rrv4f4
+            v0,v1,v2,v3,v4 = self.mesh.rr_star.T #self.rrv4f4 ##Hui update
         
         #vN = self.mesh.get_v4_orient_unit_normal(is_diagnet)[1]
         vN = self.mesh.get_v4_orient_unit_normal2(is_diagnet)[1]
@@ -979,6 +979,139 @@ class GP_DOINet(GuidedProjectionBase):
         return Cg1, Cg2, rho, pos
 
 
+    def get_geodesic_curve_normals(self):
+        """ for DOI-net, measure the geodesic curves property at vertex stars
+        a   1    d
+        2   v    4
+        b   3    c
+        
+        if False(not good):
+            S1. vertex_normal Nv is defined as averages of two neighboring normals Nl, Nr 
+               at the mid-points (v2+v)/2, (v4+v)/2 of two parallels: Nv // Nl + Nr
+        else:
+            S1. vertex normal Nv is the average of four face normals: Nv // Nf1+Nf2+Nf3+Nf4
+        
+        S2. compute the osculating plane' normal No // (v1-v)x(v3-v)
+        
+        S3. measure the dot Nv * No, which should be near 0=cos<Nv, No>
+        """
+        V = self.mesh.vertices
+        v0,v1,v2,v3,v4 = self.mesh.rr_star.T #self.rrv4f4 ##Hui update
+        v0,va,vb,vc,vd = self.mesh.rr_star_corner
+        
+        if True:
+            Nf1 = np.cross(V[v0]-V[va], V[v1]-V[v2])
+            Nf2 = np.cross(V[v3]-V[v2], V[v0]-V[vb])
+            Nf3 = np.cross(V[vc]-V[v0], V[v4]-V[v3])
+            Nf4 = np.cross(V[v4]-V[v1], V[vd]-V[v0])
+            
+            Nf1 = Nf1 / np.linalg.norm(Nf1,axis=1)[:,None]
+            Nf2 = Nf2 / np.linalg.norm(Nf2,axis=1)[:,None]
+            Nf3 = Nf3 / np.linalg.norm(Nf3,axis=1)[:,None]
+            Nf4 = Nf4 / np.linalg.norm(Nf4,axis=1)[:,None]
+            
+            Nv = (Nf1+Nf2+Nf3+Nf4)/np.linalg.norm(Nf1+Nf2+Nf3+Nf4,axis=1)[:,None]
+            
+            if 0:
+                eps = np.finfo(float).eps
+                No = np.cross(V[v1]-V[v0], V[v3]-V[v0])
+                No = No / (np.linalg.norm(No,axis=1)[:,None]+eps)
+                cos = np.abs(np.einsum('ij,ij->i', Nv, No)) ## near 0
+                ang = np.abs(np.arccos(cos) / np.pi * 180 - 90) ## near 0
+                print('cos[min,max]=',np.min(cos), np.max(cos))
+                print('ang[min,max]=',np.min(ang), np.max(ang))
+                return V[v0], Nv, No, cos
+            else:
+                e1 = (V[v1]-V[v0]) / np.linalg.norm(V[v1]-V[v0],axis=1)[:,None]
+                e3 = (V[v3]-V[v0]) / np.linalg.norm(V[v3]-V[v0],axis=1)[:,None]
+                t,n = e1-e3,e1+e3
+                
+                n_norm = np.linalg.norm(n, axis=-1)
+                mask = n_norm > 1.0
+                n[mask] = n[mask] / n_norm[mask, None]
+                
+                No = np.cross(t, n)
+                
+                ## remove outer-boundary vertices:
+                ind = self.mesh.ind_rr_star_v4f4
+                an, Nv, t, n, No = V[v0][ind], Nv[ind], t[ind], n[ind], No[ind]
+                
+                cos = np.abs(np.einsum('ij,ij->i', Nv, No)) ## near 0
+                ang1 = np.abs(np.arccos(cos) / np.pi * 180 - 90) ## near 0
+                print('cos[min,max]=',np.min(cos), np.max(cos))
+                print('ang1[min,max]=',np.min(ang1), np.max(ang1))
+                
+                ##after comparing cos, sin; sin is much smaller, choose this way to measure error
+                ##i.e. angle between vertex_normal and average of geodesic's 2 edge_vectors
+                sin = np.linalg.norm(np.cross(Nv, n), axis=-1) ## near 0
+                ang2 = np.arcsin(sin) / np.pi * 180 ## near 0
+                print('sin[min,max]=',np.min(sin), np.max(sin))
+                print('ang2[min,max]=',np.min(ang2), np.max(ang2))
+                
+                err = np.minimum(ang1, ang2) ##shows ang2 is much smaller than ang1
+                print('err[min,max]=',np.min(err), np.max(err))
+        
+                return an, Nv, n, err
+        else:
+            Vl, Vr = (V[v2]+V[v0])/2, (V[v4]+V[v0])/2
+            
+            mid = (V[va]+V[v1])/2 - Vl
+            ef1 = mid / np.linalg.norm(mid,axis=1)[:,None]
+            
+            mid = (V[vb]+V[v3])/2 - Vl
+            ef2 = mid / np.linalg.norm(mid,axis=1)[:,None]
+            
+            mid = (V[vc]+V[v3])/2 - Vr
+            ef3 = mid / np.linalg.norm(mid,axis=1)[:,None]
+            
+            mid = (V[vd]+V[v1])/2 - Vr
+            ef4 = mid / np.linalg.norm(mid,axis=1)[:,None]
+            
+            if 0:
+                eps = np.finfo(float).eps
+                
+                Nl = (ef1+ef2) / (np.linalg.norm(ef1+ef2,axis=1)[:,None]+eps)
+                Nr = (ef3+ef4) / (np.linalg.norm(ef3+ef4,axis=1)[:,None]+eps)
+                Nv = (Nl+Nr) / (np.linalg.norm(Nl+Nr,axis=1)[:,None]+eps)
+                
+                No = np.cross(V[v1]-V[v0], V[v3]-V[v0])
+                No = No / (np.linalg.norm(No,axis=1)[:,None]+eps)
+                
+                cos = np.abs(np.einsum('ij,ij->i', Nv, No)) 
+                print('cos[min,max]=',np.min(cos), np.max(cos))
+                return V[v0], Nv, No, Vl,Nl, Vr,Nr, cos
+        
+            else:
+                # 可自行调大阈值，eps太小容易误判
+                thresh = 0.01 ##hui: hard to choose proper thresh and select
+            
+                norm_cross_ef12 = np.linalg.norm(np.cross(ef1, ef2), axis=1)
+                norm_cross_ef34 = np.linalg.norm(np.cross(ef3, ef4), axis=1)
+                norm_cross_v = np.linalg.norm(np.cross(V[v1]-V[v0], V[v3]-V[v0]), axis=1)
+                
+                print('norm[min,max]=',np.min(norm_cross_ef12), np.mean(norm_cross_ef12))
+                print('norm[min,max]=',np.min(norm_cross_ef34), np.mean(norm_cross_ef34))
+                print('norm[min,max]=',np.min(norm_cross_v), np.mean(norm_cross_v))
+                
+                # 任意一个共线条件满足
+                mask = (norm_cross_ef12 < thresh) | (norm_cross_ef34 < thresh) | (norm_cross_v < thresh)
+                #ind1 = np.nonzero(mask)[0]
+                ind2 = np.nonzero(~mask)[0]
+                
+                Nl = (ef1[ind2]+ef2[ind2]) / np.linalg.norm(ef1[ind2]+ef2[ind2],axis=1)[:,None]
+                Nr = (ef3[ind2]+ef4[ind2]) / np.linalg.norm(ef3[ind2]+ef4[ind2],axis=1)[:,None]
+                Nv = (Nl+Nr) / np.linalg.norm(Nl+Nr,axis=1)[:,None]
+                
+                No = np.cross(V[v1[ind2]]-V[v0[ind2]], V[v3[ind2]]-V[v0[ind2]])
+                No = No / np.linalg.norm(No,axis=1)[:,None]
+                
+                cos = np.abs(np.einsum('ij,ij->i', Nv, No)) 
+                print('cos[min,max]=',np.min(cos), np.max(cos))
+                
+                return V[v0[ind2]], Nv, No, Vl[ind2],Nl, Vr[ind2],Nr, cos
+
+        
+    
     def get_CGC_circular_strip(self,width,is_diagnet=False,
                                is_centerline=False,is_smooth=False,
                                is_even_selection=False,offset_scale=0):
@@ -1102,7 +1235,7 @@ class GP_DOINet(GuidedProjectionBase):
         if is_diagnet:
             s0,s1,s2,s3,s4 = self.mesh.rr_star_corner
         else:
-            s0,s1,s2,s3,s4 = self.mesh.rrv4f4
+            s0,s1,s2,s3,s4 = self.mesh.rr_star.T #self.rrv4f4 ##Hui update
         S0,S1,S2,S3,S4 = V[s0],V[s1],V[s2],V[s3],V[s4]
         centers,radius,coeff,Nv4 = interpolate_sphere(S0,S1,S2,S3,S4)
         VV = np.linalg.norm(np.vstack((S0,S1,S2,S3,S4)),axis=1)**2
@@ -1126,7 +1259,7 @@ class GP_DOINet(GuidedProjectionBase):
         if is_diagnet:
             s0,s1,s2,s3,s4 = self.mesh.rr_star_corner
         else:
-            s0,s1,s2,s3,s4 = self.mesh.rrv4f4
+            s0,s1,s2,s3,s4 = self.mesh.rr_star.T #self.rrv4f4 ##Hui update
             
         S0,S1,S2,S3,S4 = V[s0],V[s1],V[s2],V[s3],V[s4]
         centers,r,coeff,Nv4 = interpolate_sphere(S0,S1,S2,S3,S4)
@@ -1156,7 +1289,7 @@ class GP_DOINet(GuidedProjectionBase):
             n = Nv4
             un = n / np.linalg.norm(n,axis=1)[:,None]
             if is_diagnet:
-                _,sa,sb,sc,sd = self.mesh.rrv4f4
+                _,sa,sb,sc,sd = self.mesh.rr_star.T #self.rrv4f4 ##Hui update
             else:
                 _,sa,sb,sc,sd = self.mesh.rr_star_corner
             t1 = (V[sa]-V[sc])/np.linalg.norm(V[sa]-V[sc], axis=1)[:,None]
@@ -1199,7 +1332,7 @@ class GP_DOINet(GuidedProjectionBase):
             if is_diagnet:
                 v,v1,v2,v3,v4 = self.mesh.rr_star_corner
             else:
-                v,v1,v2,v3,v4 = self.mesh.rrv4f4
+                v,v1,v2,v3,v4 = self.mesh.rr_star.T #self.rrv4f4 ##Hui update
 
             #vN = self.mesh.get_v4_orient_unit_normal(is_diagnet)[1]
             vN = self.mesh.get_v4_orient_unit_normal2(is_diagnet)[1]
@@ -1560,7 +1693,7 @@ class GP_DOINet(GuidedProjectionBase):
                 v,v1,v2,v3,v4 = self.mesh.rr_star_corner
             else:
                 name = 'Anet'
-                v,v1,v2,v3,v4 = self.mesh.rrv4f4
+                v,v1,v2,v3,v4 = self.mesh.rr_star.T #self.rrv4f4 ##Hui update
 
         if self.is_initial:    
             Nv = self.mesh.vertex_normals()[v]

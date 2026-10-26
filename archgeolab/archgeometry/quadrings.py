@@ -496,6 +496,13 @@ class MMesh(Mesh):
             self.quadfaces()
         return self._num_quadface    
     
+    ##oriented ver_rrv - num_rrv  -  rr_star - rr_quadface - rr_4quad_vers
+    @property
+    def ver_rrv(self):
+        if self._ver_rrv is None:
+            self.regular_vertex_regular_quad()
+        return self._ver_rrv
+    
     @property
     def num_rrf(self):
         if self._num_rrf==0:
@@ -527,7 +534,9 @@ class MMesh(Mesh):
     def rr_4quad_vers(self): #[vj1,vj2,vj3,vj4],j=1,2,3,4, at rr_star
         if self._rr_4quad_vers is None:
             self.regular_vertex_regular_quad()
-        return self._rr_4quad_vers
+        return self._rr_4quad_vers    
+    ##------------------------------------------------------------------------
+    ##oriented & more regular:  rrv4f4 - ind_rr_star_v4f4 - num_rrv4f4 - ver_rrv4f4 - rr_star_corner
     @property
     def ind_rr_quadface_order(self):
         if self._ind_rr_quadface_order is None:
@@ -549,6 +558,7 @@ class MMesh(Mesh):
         if self._rrv4f4 is None:
             "v,v1,v2,v3,v4 = rrv4f4; len==num_rrv4f4"
             self._rrv4f4 = self.rr_star[self.ind_rr_star_v4f4].T
+            #print(self.rr_star.shape, len(self.ind_rr_star_v4f4))
         return self._rrv4f4    
     @property
     def num_rrv4f4(self):
@@ -558,14 +568,15 @@ class MMesh(Mesh):
     @property
     def ver_rrv4f4(self):
         if self._ver_rrv4f4 is None:
-            self._ver_rrv4f4 = self.rr_star[self.ind_rr_star_v4f4][:,0]
+            self._ver_rrv4f4 = self.rrv4f4[:,0]
         return self._ver_rrv4f4
-
     @property
     def rr_star_corner(self):
         if self._rr_star_corner is None:
             self.get_rr_vs_4face_corner()
-        return self._rr_star_corner    
+        return self._rr_star_corner  
+    ##------------------------------------------------------------------------
+    
     @property
     def rr_quadface_tristar(self):
         if self._rr_quadface_tristar is None:
@@ -676,7 +687,7 @@ class MMesh(Mesh):
         [ivf1,ivf2,ivf3,ivf4]: quadfaces indices of M_inn_inn in rrv4f4
         """
         #V = self.vertices
-        v,v1,v2,v3,v4 = self.rrv4f4
+        v,v1,v2,v3,v4 = self.rr_star.T #self.rrv4f4 ##Hui update
     
         is_patch_or_rotation = True
         "shared by project self.mesh, pleated, aotu"
@@ -764,7 +775,7 @@ class MMesh(Mesh):
         if is_diagnet:
             v0,v1,v2,v3,v4 = self.rr_star_corner
         else:
-            v0,v1,v2,v3,v4 = self.rrv4f4
+            v0,v1,v2,v3,v4 = self.rr_star.T #self.rrv4f4 ##Hui update
         
         def _nonmultiple(v1,v3):
             vl = np.r_[v1,v0]
@@ -1046,7 +1057,7 @@ class MMesh(Mesh):
 
     def regular_vertex_regular_quad(self,delete_multi=True):
         """ oriented self.quadfaces()
-        self.num_rrv : same with num_regular
+        self.num_rrv : same with num_ver_regular
         self.rr_star : same with starM
         self.num_rrf : same with num_quadface
         self.rr_quadface : same but different order with quadface
@@ -1148,16 +1159,16 @@ class MMesh(Mesh):
         self._rr_quadface = farr
         self._rr_quadface_order = forder
         #print(len(farr),len(f4list),num,len(index))
-        self._num_rrv = num # same with num_regular
+        self._num_rrv = num # same with num_ver_regular
         #order = np.setdiff1d(np.arange(num),index//4)
         self._rr_star = starM # same with starM
         self._rr_4quad_vers = f4 #rr_4quad_vers
-        #return f4, farr, starM
+        self._ver_rrv = starM[:,0]
 
     def index_of_rrquad_face_vertex_with_rrv(self):
         "rr_quadface may include vertices that are not in rr_star; here are in"
         v1,v2,v3,v4  = self.rr_quadface.T
-        rrv = self.ver_rrv4f4
+        rrv = self.ver_rrv ##self.ver_rrv4f4 ##Hui update
         ind = []
         for i in range(len(v1)):
             if v1[i] in rrv and v2[i] in rrv and v3[i] in rrv and v4[i] in rrv:
@@ -1191,7 +1202,7 @@ class MMesh(Mesh):
            b   3    c
         """
         H = self.halfedges
-        v,v1,v2,v3,v4 = self.rrv4f4
+        v,v1,v2,v3,v4 = self.rr_star.T #self.rrv4f4 ##Hui update
         va,vb,vc,vd = [],[],[],[]
         for i in range(len(v)):
             e1=np.intersect1d(np.where(H[:,0]==v[i])[0],np.where(H[H[:,4],0]==v1[i])[0])
@@ -1225,7 +1236,7 @@ class MMesh(Mesh):
         for f in fb:
             vsb = np.r_[vsb,np.array(self.faces_list()[f])]
         vsb = np.unique(vsb)
-        rrv = self.ver_rrv4f4
+        rrv = self.ver_rrv ##self.ver_rrv4f4 ##Hui update
         inn = np.setdiff1d(rrv,vsb)
         rrb = np.intersect1d(rrv,vsb)
         idi,idb = [],[]
@@ -1235,6 +1246,7 @@ class MMesh(Mesh):
             idb.append(np.where(rrv==j)[0][0])
         return np.array(idi), np.array(idb)
 
+
     def index_of_4quad_face_order_at_regular_vs(self):
         """ most strong regular case: regular vertex & regular quads
         star = self.rr_star
@@ -1242,8 +1254,14 @@ class MMesh(Mesh):
         if1,if2,if3,if4 = self.ind_rr_quadface_order.T
         """
         H = self.halfedges
-        star = self.rr_star#[self.ind_rr_star_v4f4] ##NOTE: NEED TO CHECK IF [self.ind_rr_star_v4f4]
+        star = self.rr_star
         forder = self.rr_quadface_order
+        
+        #hui: before seems no effect, then add below, to check if it will be conflict with others
+        if True:
+            if0 = self.rr_quadface_4neib[0]
+            forder = forder[if0]
+            
         flist = []
         ind = []
         for i in range(len(star)):
@@ -1268,7 +1286,7 @@ class MMesh(Mesh):
                     "for face who does belong to forder"
                     ind.append(i)
                     flist.append([if1[0],if2[0],if3[0],if4[0]])
-        self._ind_rr_star_v4f4 = np.array(ind) # ind_rr_star_v4f4
+        self._ind_rr_star_v4f4 = np.array(ind)
         self._ind_rr_quadface_order = np.array(flist) 
 
 
@@ -1296,7 +1314,7 @@ class MMesh(Mesh):
         if is_diagnet:
             v0,v1,v2,v3,v4 = self.rr_star_corner
         else:
-            v0,v1,v2,v3,v4 = self.rrv4f4 #(self.rr_star).T
+            v0,v1,v2,v3,v4 = self.rr_star.T #self.rrv4f4 ##Hui update
         V = self.vertices
         VN = np.copy(self.vertex_normals())
         
@@ -1638,7 +1656,7 @@ class MMesh(Mesh):
 
     def get_isoline_vertex_list(self,interval,another_direction=True):
         "along one bdry for a patch-shape; two bdry for a star-shape"
-        v,v1,v2,v3,v4 = self.rrv4f4
+        v,v1,v2,v3,v4 = self.rr_star.T #self.rrv4f4 ##Hui update
         if another_direction:
             vl,vr = v2,v4
         else:
@@ -2087,7 +2105,7 @@ class MMesh(Mesh):
         else:
             tristar = np.vstack((np.r_[id00,id01],np.r_[idl,idu],np.r_[idr,idd])).T
         self._rr_quadface_tristar = tristar
-        self._rr_quadface_4neib = np.c_[if0,if1,if2,if3,if4]
+        self._rr_quadface_4neib = [if0,if1,if2,if3,if4]
 
     # -------------------------------------------------------------------------
     #                       all faces / vertices
@@ -2481,7 +2499,7 @@ class MMesh(Mesh):
         if is_diagnet:
             v0,v1,v2,v3,v4 = self.rr_star_corner
         else:
-            v0,v1,v2,v3,v4 = self.rrv4f4
+            v0,v1,v2,v3,v4 = self.rr_star.T #self.rrv4f4 ##Hui update
         v13,v24 = np.unique(np.r_[v1,v3]),np.unique(np.r_[v2,v4])
         
         "more general, one closed-boundary v"
@@ -2631,7 +2649,7 @@ class MMesh(Mesh):
     def get_v4_unit_edge(self,is_diagnet=False,rregular=True):
         V = self.vertices
         if rregular:
-            v,v1,v2,v3,v4 = self.rrv4f4
+            v,v1,v2,v3,v4 = self.rr_star.T #self.rrv4f4 ##Hui update
         else:
             ## v,v1,v2,v3,v4 = self.ver_regular_star.T
             v,v1,v2,v3,v4 = self.ver_star_matrix.T
@@ -2675,7 +2693,7 @@ class MMesh(Mesh):
         return lt1,lt2,ut1,ut2,anchor,angle
     
     def get_v4_unit_normal(self,is_diagnet=False,rregular=True):
-        v = self.ver_rrv4f4
+        v = self.ver_rrv ##self.ver_rrv4f4 ##Hui update
         _,_,t1,t2,an,_ = self.get_v4_unit_tangents(is_diagnet,rregular)
         n = np.cross(t1,t2)
         un = n / np.linalg.norm(n,axis=1)[:,None]
@@ -2693,7 +2711,7 @@ class MMesh(Mesh):
     def get_v4_orient_unit_normal2(self,is_diagnet=False,rregular=True):##new added
         "updated for each time, orientn; defined at rrv4f4"
         vN = self.new_vertex_normals(is_diagnet)
-        v = self.ver_rrv4f4
+        v = self.ver_rrv ##self.ver_rrv4f4 ##Hui update
         an = self.vertices[v]
         Nv = self.vertex_normals()[v]
         i = np.where(np.einsum('ij,ij->i',Nv,vN)<0)[0]
@@ -2719,7 +2737,7 @@ class MMesh(Mesh):
             v,va,vb,vc,vd = self.rr_star_corner# in diagonal direction
             V0,V1,V2,V3,V4 = V[v],V[va],V[vb],V[vc],V[vd]
         else:
-            v,v1,v2,v3,v4 =self.rrv4f4
+            v,v1,v2,v3,v4 = self.rr_star.T #self.rrv4f4 ##Hui update
             V0,V1,V2,V3,V4 = V[v],V[v1],V[v2],V[v3],V[v4]
         ll1 = np.linalg.norm(V1-V0,axis=1)**2
         ll2 = np.linalg.norm(V2-V0,axis=1)**2
@@ -2748,7 +2766,7 @@ class MMesh(Mesh):
             return V, alln
 
         elif is_n:
-            v = self.ver_rrv4f4
+            v = self.ver_rrv ##self.ver_rrv4f4 ##Hui update
             an = V[v]
             n = self.vertex_normals()[v]
             return an,n
@@ -2775,13 +2793,14 @@ class MMesh(Mesh):
         V = self.vertices
         N = self.vertex_normals()
         vN = self.get_v4_orient_unit_normal()[1]
-        N[self.ver_rrv4f4] = vN
+        ind = self.ver_rrv ##self.ver_rrv4f4 ##Hui update
+        N[ind] = vN 
         
         arr = brr = np.array([])
         for ilist in vlist:
             vl,vc,vr = np.array(ilist[:-2]),np.array(ilist[1:-1]),np.array(ilist[2:])
             if is_rrv4list:
-                sect,ivc,irrv = np.intersect1d(vc,self.ver_rrv4f4,return_indices=True)
+                sect,ivc,irrv = np.intersect1d(vc,ind,return_indices=True)
                 if len(ivc)!=0:
                     wl,wc,wr = vl[ivc],vc[ivc],vr[ivc]
                     if alloN is None:
