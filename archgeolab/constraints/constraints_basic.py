@@ -87,6 +87,28 @@ def con_equal(X,c_a,c_b):
     H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
     return H,r
 
+def con_equal_vector(X,c_vl,c_vr):
+    "vl = vr"
+    num3 = len(c_vl)
+    col = np.r_[c_vl,c_vr]
+    row = np.tile(np.arange(num3),2)
+    one = np.ones(num3)
+    data = np.r_[one,-one]
+    r = np.zeros(num3)
+    H = sparse.coo_matrix((data,(row,col)), shape=(num3,len(X)))
+    return H,r
+
+def con_adjoin_pair_points(X,c_vl,c_vr,weight=1,is_2D=False):
+    "3D or 2D joint_pair_points: (vl-vr)^2=0; more general than con_equal_vector"
+    a = 2 if is_2D else 3
+    num = int(len(c_vl)/a)
+    col = np.r_[c_vl,c_vr]
+    row = np.tile(np.arange(num),a*2)
+    data = 2 * np.r_[X[c_vl]-X[c_vr], X[c_vr]-X[c_vl]]
+    r = np.linalg.norm((X[c_vl]-X[c_vr]).reshape(-1,a,order='F'),axis=1)**2
+    H = sparse.coo_matrix((data,(row,col)), shape=(num,len(X)))
+    return H*weight,r*weight
+
 def con_constl(c_ld1,init_l1,N):
     "ld1 == const."
     num = len(c_ld1)
@@ -385,8 +407,7 @@ def con_oriented_vectors(X,c_v0,c_v2,c_v4,c_cg,c_pos):
     H = sparse.coo_matrix((data,(row,col)), shape=(num, len(X)))
     r = np.einsum('ij,ij->i',d1.reshape(-1,3, order='F'),d2.reshape(-1,3, order='F'))-X[c_pos]**2
     return H,r
-    
-    
+
     # -------------------------------------------------------------------------
     #                          Geometric Constraints (from Davide)
     # -------------------------------------------------------------------------

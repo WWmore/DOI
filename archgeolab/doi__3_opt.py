@@ -1110,7 +1110,78 @@ class GP_DOINet(GuidedProjectionBase):
                 
                 return V[v0[ind2]], Nv, No, Vl[ind2],Nl, Vr[ind2],Nr, cos
 
+    def get_geodesic_parallel_errors(self, is_angle_error=False, is_dist_error=False):
+        "compare dgpc with doi by angles and distances"
+        V = self.mesh.vertices
+
+        if is_angle_error:
+            v0,v1,v2,v3,v4 = self.mesh.rr_star.T
+            d1 = np.linalg.norm(V[v1]-V[v0],axis=1)
+            d2 = np.linalg.norm(V[v2]-V[v0],axis=1)
+            d3 = np.linalg.norm(V[v3]-V[v0],axis=1)
+            d4 = np.linalg.norm(V[v4]-V[v0],axis=1)
+            
+            el = (d1+d2+d3+d4)/4.0
+            
+            e1 = (V[v1]-V[v0]) / d1[:,None]
+            e2 = (V[v2]-V[v0]) / d2[:,None]
+            e3 = (V[v3]-V[v0]) / d3[:,None]
+            e4 = (V[v4]-V[v0]) / d4[:,None]
+            
+            if not self.is_GO_or_OG:
+                "<e1,e2>=<e1,e4>, <e2,e3>=<e3,e4>"
+                e1,e2,e3,e4 = e2,e3,e4,e1
+            
+            "<e1,e2>=<e2,e3>, <e3,e4>=<e4,e1>"
+            a12 = np.arccos(np.einsum('ij,ij->i',e1,e2))
+            a23 = np.arccos(np.einsum('ij,ij->i',e2,e3))
+            err1 = np.abs((a12-a23)/np.pi * 180) ##degree
+            
+            a34 = np.arccos(np.einsum('ij,ij->i',e3,e4))
+            a41 = np.arccos(np.einsum('ij,ij->i',e4,e1))
+            err2 = np.abs((a34-a41)/np.pi * 180) ##degree
         
+            err = (err1+err2)/2.0
+            
+            print('angle:[min,mean,max]=','%.5f'%np.min(err),'%.5f'%np.mean(err),'%.5f'%np.max(err))
+            
+            from archgeolab.archgeometry.conicSection import circle3D
+            vN = self.mesh.new_vertex_normals()
+            radii = el * 0.4
+            cCurve,cFace = circle3D(V[v0],radii,vN)
+            return V[v0],cCurve,cFace, err
+        
+        if is_dist_error:
+            ## corresponding to con_DOI, easy to visualize, but may have problems for complex shape
+            """
+            parallel strip:            
+                            v1 --- v4 --- v5 --- ...
+                            |       |     |
+                            v2 --- v3 --- v6 ---...
+ 
+            parallel: equal geodesic-segment lengths along each parallel strip
+                        (v1-v2)^2=(v3-v4)^2=(v5-v6)^2=....
+            """
+            if self.is_GO_or_OG: ## need to check manually, since it may be not oriented as con_DOI__freeform
+                M = self.mesh.vMatrix.T ##self.mesh.vMatrix.T
+            else: 
+                M = self.mesh.vMatrix
+            m,n = M.shape
+            vup = M[:-1,1:-1].flatten('F')
+            vdw = M[1:, 1:-1].flatten('F')
+            
+            #pl = make_polyline_from_endpoints(V[vup],V[vdw])
+            
+            err = np.array([])
+            for i in range(m-1):
+                dist = np.linalg.norm(V[M[i,1:-1]]-V[M[i+1,1:-1]],axis=1)
+                avg = np.mean(dist)
+                i_err = np.abs(dist-avg)/avg
+                err = np.r_[err, i_err]
+                
+            print('dist:[min,mean,max]=','%.5f'%np.min(err),'%.5f'%np.mean(err),'%.5f'%np.max(err))
+            return V[vup],V[vdw], err
+
     
     def get_CGC_circular_strip(self,width,is_diagnet=False,
                                is_centerline=False,is_smooth=False,

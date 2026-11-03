@@ -11,8 +11,16 @@ import numpy as np
 import scipy
 #------------------------------------------------------------------------------
 from geometrylab.geometry.meshprimitives import mesh_sphere
+
+from geometrylab.geometry.meshpy import Mesh
+
+from geometrylab.geometry.circle import circle_three_points
+
+from archgeolab.archgeometry.orthogonalVectors import Basis
+
 # -----------------------------------------------------------------------------
 """
+circle3D
 vs_sphere_equation
 sphere_equation
 get_vs_interpolated_sphere
@@ -23,6 +31,23 @@ get_sphere_packing
 #------------------------------------------------------------------------------
 #                                 GENERATION
 #------------------------------------------------------------------------------
+def circle3D(C=[0,0,0], ri=1, N=[0,0,1], Fa=80):
+    """
+    center(list),
+    radius(number),
+    normal vectors(list)
+    to get spatial circle mesh
+    """
+    P1,P2,P3 = Basis(N,anchors=C,r=ri).orthogonalPlane3Vectors()
+    C = circle_three_points(P1,P2,P3)
+    C.make_vertices()
+    verList = C.vertices
+    Fa = C.sampling
+    fList = (np.arange(len(verList)).reshape(-1,Fa)).tolist()
+    cmesh = Mesh()
+    cmesh.make_mesh(verList, fList)
+    return C,cmesh
+
 def vs_sphere_equation(V,vneib):
     "V=vertices_coordinate, index: vneib=[v,neib]"
     "P = [x^2+y^2+z^2,x,y,z,1]"

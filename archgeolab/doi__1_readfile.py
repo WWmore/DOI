@@ -82,6 +82,19 @@ if __name__ == '__main__':
     # file = rot +r'/pseudosphere_unitscale.obj'
     # reffile = rot +r'/pseudosphere_unitscale_sub2.obj'
     
+    
+    # file = a +r'/lilium_quad_rewrite_gp_remesh_GeodesicPolarNet.obj'
+    # reffile = a +r'/lilium_quad_rewrite_sub.obj'
+    
+    # ## vase is the old one, but hard to compare dgpc and doi, then removed:
+    # file = a +r'/vase2_apppln_near.obj' 
+    # reffile = a +r'/vase2.obj'
+    
+    ## use this bowling example for paper:
+    # file = a +r'/bowling_app1.obj'
+    # reffile = a +r'/bowling_tri_sub_sub.obj'
+    
+    
     #file = a +r'/richmond_polar4_sparse.obj'
     
     #file =r'/Users/wanghui/Desktop/geometrylab7/obj_PQ/evolute_ex8.obj'
@@ -104,7 +117,7 @@ if __name__ == '__main__':
     GUI.open_obj_file(file)
     
     '''Open another obj file'''
-   # GUI.open_obj_file(reffile)
+    #GUI.open_obj_file(reffile)
     
     '''Start geolab main loop'''
     GUI.start()

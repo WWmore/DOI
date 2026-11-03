@@ -32,8 +32,7 @@ from geometrylab.gui.handler import Handler
 
 from geometrylab.optimization.gridshell import Gridshell
 
-from geometrylab.gui.tools import IncrementalRemesh, CornerTolerance,\
-                                  Loads, SaveMesh
+from geometrylab.gui.tools import IncrementalRemesh, CornerTolerance, Loads, SaveMesh
 
 
 

@@ -220,7 +220,7 @@ class DOINet(GeolabComponent):
     
     show_orient_vn = Bool(label='~vN')
     
-    show_isoline = Bool(label='Crv')
+    show_isoline = Bool(label='Isoline')
     
     show_CGC_strip = Bool(label='CGCstrip')
     show_CNC_strip = Bool(label='CNCstrip')
@@ -231,7 +231,9 @@ class DOINet(GeolabComponent):
     
     show_isometric_edge_errors=Bool(label='isoErr')
     
-    show_doi_geodesic_errors = Bool(label='doiErr')
+    show_doi_geodesic_errors = Bool(label='geodesicErr') ##angle between principal normals and mesh normals
+    show_doi_angle_errors = Bool(label='angleErr') ##two pairs of equal angles
+    show_doi_dist_errors = Bool(label='distErr') ## equal geodesic-distances between parallels
     
     #show_planar_poly1_normal = Bool(label='Ply1-N')
     show_planar_poly1_plane= Bool(label='Ply1-Pln')
@@ -336,7 +338,9 @@ class DOINet(GeolabComponent):
                          'show_planar_poly1_plane',
                          'show_planar_poly2_plane',),
                   
-                  HGroup('show_doi_geodesic_errors'),
+                  HGroup('show_doi_geodesic_errors',
+                         'show_doi_angle_errors',
+                         'show_doi_dist_errors'),
                   # HGroup(Item('interactive',
                   #             tooltip='InteractiveOptimization',),
                   #        Item('_'),
@@ -529,7 +533,7 @@ class DOINet(GeolabComponent):
             self.meshmanager.hide_faces()
         else:
             self.meshmanager.plot_faces(color=(232,224,213),smooth=True,
-                                        glossy=0,opacity=0.99)
+                                        glossy=0,opacity=0.3)
 
     @on_trait_change('hide_edge')
     def plot_hide_edges(self):
@@ -768,6 +772,7 @@ class DOINet(GeolabComponent):
         else:
             self.mesh.reference_mesh = self.mesh.copy_mesh()#self.mesh
         rm = self.mesh.reference_mesh
+
         "get the index of boundary vertices:"
         ind = rm.boundary_curves(corner_split=False)[0]    
         "refine the boundary vertices"
@@ -776,6 +781,15 @@ class DOINet(GeolabComponent):
         N = 5
         poly.refine(N)
         self.ref_glide_bdry_polyline = poly
+        
+        if 0: ##rotational topology, have a second boundary ##need to checy manually
+            ind = rm.boundary_curves(corner_split=False)[1]    
+            Ver = rm.vertices[ind]
+            poly = Polyline(Ver,closed=True)  
+            N = 5
+            poly.refine(N)
+            self.ref_glide_bdry_polyline = [self.ref_glide_bdry_polyline, poly]
+            
         self.optimizer.glide_reference_polyline = self.ref_glide_bdry_polyline
         
     @on_trait_change('show_refer_mesh')
@@ -789,13 +803,11 @@ class DOINet(GeolabComponent):
             except:
                 self.set_refermesh()
                 rm = self.mesh.reference_mesh
-            showe = Edges(rm,color ='black',tube_radius=0.5*self.meshmanager.r,
-                          #color=(157,157,157),tube_radius=0.3*self.meshmanager.r,
-                          name=name+'e')
-            # showf = Faces(rm,color = (77,77,77),
-            #               opacity=0.1,
-            #               name=name+'f')
-            self.meshmanager.add([showe])
+            # showe = Edges(rm,color ='black',tube_radius=0.5*self.meshmanager.r,
+            #               #color=(157,157,157),tube_radius=0.3*self.meshmanager.r,
+            #               name=name+'e')
+            showf = Faces(rm,color=(180,180,180),opacity=1,glossy=0,name=name+'f')
+            self.meshmanager.add([showf])
         else:
             self.meshmanager.remove(name+'e')
             self.meshmanager.remove(name+'f')
@@ -805,28 +817,37 @@ class DOINet(GeolabComponent):
         name = 'ref_mesh_pl'
         if self.show_ref_mesh_boundary:
             self.set_refermesh()
-            rm = self.mesh.reference_mesh
-            if True:
-                poly = self.ref_glide_bdry_polyline
+            ##rm = self.mesh.reference_mesh
+            ##poly = rm.boundary_polylines() ##Note: from Davide's, but has problem!
+            poly = self.ref_glide_bdry_polyline
+            
+            if len(poly)==2:
+                self.meshmanager.plot_polyline(polyline=poly[0],glossy=1,
+                                               tube_radius=0.7*self.meshmanager.r,
+                                               color = 'black',name=name+'1')
+                self.meshmanager.plot_polyline(polyline=poly[1],glossy=1,
+                                               tube_radius=0.7*self.meshmanager.r,
+                                               color = 'black',name=name+'2')
             else:
-                poly = rm.boundary_polylines() ##Note: has problem!
-            self.meshmanager.plot_polyline(polyline=poly,glossy=1,
-                                           tube_radius=0.7*self.meshmanager.r,
-                                           color = 'r',name=name)
+                self.meshmanager.plot_polyline(polyline=poly,glossy=1,
+                                               tube_radius=0.7*self.meshmanager.r,
+                                               color = 'black',name=name+'1')
         else:
-            self.meshmanager.remove(name)
+            self.meshmanager.remove([name+'1',name+'2'])
 
     def update_ith_boundary(self,N=3):
         self.optimizer.i_glide_bdry_crv = []
         self.optimizer.i_glide_bdry_ver = []
         if self.glide_1st_bdry:
             v,B = self.mesh.get_i_boundary_vertex_indices(i=0)
+            #print(v)
             poly = Polyline(B,closed=False)  
             poly.refine(steps=N)
             self.optimizer.i_glide_bdry_crv.append(poly)
             self.optimizer.i_glide_bdry_ver.append(v)
         if self.glide_2nd_bdry:
             v,B = self.mesh.get_i_boundary_vertex_indices(i=1)
+            #print(v)
             poly = Polyline(B,closed=False)  
             poly.refine(steps=N)
             self.optimizer.i_glide_bdry_crv.append(poly)
@@ -1181,13 +1202,16 @@ class DOINet(GeolabComponent):
             pl1,pl2,_,_,_,_ = self.mesh.get_rregular_split_list_for_polysegmnet(is_diagnet=False,is_poly=True)
             #pl1,pl2 = get_plot_ordered_isolines(self.mesh)
             
+            if not self.switch_GO_or_OG: ##need to switch by visually checking
+                pl1, pl2 = pl2, pl1
+                
             #if self.is_both:
-            self.meshmanager.plot_polyline(pl1,color=(163,163,163), ##pink(240,114,114)
-                                           tube_radius=1*self.meshmanager.r,
+            self.meshmanager.plot_polyline(pl1,color=(200,200,200), ##pink(240,114,114)
+                                           tube_radius=1.2*self.meshmanager.r,
                                            glossy=0.1,
                                            name=name+'1')
             self.meshmanager.plot_polyline(pl2,color=(0,154,62), ##blue(98,113,180)
-                                           tube_radius=1*self.meshmanager.r,
+                                           tube_radius=1.5*self.meshmanager.r,
                                            glossy=0.1,
                                            name=name+'2')
         #     else:
@@ -1373,7 +1397,7 @@ class DOINet(GeolabComponent):
             C,data = self.optimizer.get_snet_data(self.switch_diag_or_ctrl,center=True)
             r = self.meshmanager.r
             self.meshmanager.plot_glyph(points=C,vertex_data=data,
-                                        color='blue-red',lut_range='0:+',
+                                        color='coolwarm',lut_range='0:+', ##blue-red  coolwarm
                                         radius=2*r,name=name)
         else:
             self.meshmanager.remove(name)
@@ -1503,7 +1527,7 @@ class DOINet(GeolabComponent):
                 if False:
                     data = sm.face_planarity()
                     showf = Faces(sm,face_data=data,
-                                  lut_range=[0,np.max(data)],color='blue-red',
+                                  lut_range=[0,np.max(data)],color='coolwarm',
                                   #color=clr,
                                   name=name1+'f') 
                 else:
@@ -1515,7 +1539,7 @@ class DOINet(GeolabComponent):
                 if False:
                     data = sm.face_planarity()
                     showf = Faces(sm,face_data=data,
-                                  lut_range=[0,np.max(data)],color='blue-red',
+                                  lut_range=[0,np.max(data)],color='coolwarm',
                                   #color=clr,
                                   name=name2+'f') 
                 else:
@@ -1531,7 +1555,7 @@ class DOINet(GeolabComponent):
                     
                 data = sm.face_planarity()
                 showf = Faces(sm,face_data=data,
-                              lut_range=[0,np.max(data)],color='blue-red',#color=clr,
+                              lut_range=[0,np.max(data)],color='coolwarm',#color=clr,
                               name=name+'f') 
                 showe = Edges(sm,color=clr,name=name+'e')
                 self.meshmanager.add([showf,showe])
@@ -1677,7 +1701,7 @@ class DOINet(GeolabComponent):
             self.meshmanager.plot_polyline(polyline=pl1,edge_data = data,
                                             glossy=1,
                                             tube_radius=1*self.meshmanager.r,
-                                            color='blue-red',
+                                            color='coolwarm',
                                             lut_range = [0,e],
                                             name=name+'1')  
             
@@ -1694,7 +1718,7 @@ class DOINet(GeolabComponent):
             # self.meshmanager.plot_polyline(polyline=pl2,edge_data = data,
             #                                 glossy=1,
             #                                 tube_radius=1*self.meshmanager.r,
-            #                                 color='blue-red',
+            #                                 color='coolwarm',
             #                                 lut_range = [0,e],
             #                                 name=name+'2')  
 
@@ -1709,7 +1733,7 @@ class DOINet(GeolabComponent):
             upper = 5 #max_cos=0.01, np.arccos(0.01)/np.pi*180
             r = self.meshmanager.r
             self.meshmanager.plot_glyph(points=V0,vertex_data=cos,
-                                        color='blue-red',lut_range=[0, upper],#'0:+',
+                                        color='coolwarm',lut_range=[0, upper],#'0:+',
                                         radius=5*r,name=name+'1')
             self.meshmanager.plot_vectors(anchor=V0,vectors=Nv,position='tail',
                                           color='r', name=name+'2') 
@@ -1717,6 +1741,39 @@ class DOINet(GeolabComponent):
                                           color='black', name=name+'3') 
         else:
             self.meshmanager.remove([name+'1',name+'2',name+'3'])    
+
+    @on_trait_change('show_doi_angle_errors')
+    def plot_doi_angle_errors(self):
+        name = 'doi_angle_err'
+        if self.show_doi_angle_errors:
+            an,circle,disk,err = self.optimizer.get_geodesic_parallel_errors(is_angle_error=True)
+            # self.meshmanager.plot_glyph(points=an,color='black',
+            #                             radius=0.1*self.meshmanager.r,name=name+'p')
+            # self.meshmanager.plot_polyline(polyline=circle,color='white',
+            #                                tube_radius=1*self.meshmanager.r,name=name+'c')  
+            e = 1e-2
+            showf = Faces(disk,face_data=err,#opacity=0.8,
+                          color='blue-red',lut_range=[0,e],#'0:+',  ##coolwarm
+                          name=name+'f')  
+            self.meshmanager.add([showf])
+        else:
+            self.meshmanager.remove([name+'p',name+'c',name+'f'])  
+
+    @on_trait_change('show_doi_dist_errors')
+    def plot_doi_dist_errors(self):
+        name = 'doi_dist_err'
+        if self.show_doi_dist_errors:
+            Vup, Vdw, err = self.optimizer.get_geodesic_parallel_errors(is_dist_error=True)
+            pl = make_polyline_from_endpoints(Vup,Vdw)
+            e = 1e-2
+            self.meshmanager.plot_polyline(polyline=pl,edge_data=err,
+                                            #glossy=1,
+                                            tube_radius=1.3*self.meshmanager.r,
+                                            color='blue-red', ##blue-red
+                                            lut_range = [0,e],
+                                            name=name)  
+        else:
+            self.meshmanager.remove(name)                 
     
     #--------------------------------------------------------------------------
     #                         Printing / Check
@@ -1782,7 +1839,7 @@ class DOINet(GeolabComponent):
         self.optimizer.add_weight('fairness_diagmesh', self.fairness_diagmesh)
  
         self.optimizer.add_weight('reference_closeness', self.reference_closeness)
-        self.optimizer.add_weight('self_closeness', self.self_closeness)
+        self.optimizer.add_weight('self_closeness', self.self_closeness) # / self.mesh.mean_edge_length(), seems only make the weight smaller, but effect not obvious
         
         self.optimizer.add_weight('boundary_glide', self.boundary_glide)
         self.optimizer.add_weight('i_boundary_glide', self.i_boundary_glide)

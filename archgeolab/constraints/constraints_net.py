@@ -16,7 +16,7 @@ from archgeolab.constraints.constraints_basic import column3D,con_edge,\
     con_equal_opposite_angle,con_dependent_vector,con_cross,\
     con_orient,con_ortho,con_circle,\
     con_constangle2,con_constangle3,con_positive,con_orient2,\
-    con_oriented_vectors,con_equal, con_constangle
+    con_oriented_vectors,con_equal, con_constangle,con_equal_vector
     #con_orthogonal_2vectors,con_negative,con_diagonal2,con_orient1
     # con_unique_angle1,con_unique_angle3,con_const_angle_cos1,con_const_angle_sin1,\
     # con_multiply,con_unit_decomposition
@@ -338,14 +338,15 @@ def con_DOI__freeform(is_GO_or_OG=True,is_SIR=False,
                 r = np.r_[r,r3]
         return H,r
 
+    v,v1,v2,v3,v4 = mesh.rr_star.T #.rrv4f4 ##Hui update
+    c_v = column3D(v,0,V)
+    c_v1 = column3D(v1,0,V)
+    c_v2 = column3D(v2,0,V)
+    c_v3 = column3D(v3,0,V)
+    c_v4 = column3D(v4,0,V)
+    
     def con_equal_polysegment(is_poly1_or_2=True):
         "along one family of polylines, the segments are equal; for SIR"
-        v,v1,v2,v3,v4 = mesh.rr_star.T #.rrv4f4 ##Hui update
-        c_v = column3D(v,0,V)
-        c_v1 = column3D(v1,0,V)
-        c_v2 = column3D(v2,0,V)
-        c_v3 = column3D(v3,0,V)
-        c_v4 = column3D(v4,0,V)
         if is_poly1_or_2:
             "(v-v1)^2=(v-v3)^2 <==> v1^2 - v3^2 -2vv1 + 2vv3 = 0"
             c_vl, c_vr = c_v1, c_v3
@@ -355,10 +356,48 @@ def con_DOI__freeform(is_GO_or_OG=True,is_SIR=False,
         H,r = con_symmetry(X,c_vl,c_v,c_vr)  
         return H,r
 
+    def con_geodesic_polar(is_poly1_or_2=True):
+        "based on DOI-net, geodesic polar only requires equal segment along 1 geodesic"
+        if is_poly1_or_2:
+            c_vup, c_vdw = c_v2, c_v4
+        else:
+            c_vup, c_vdw = c_v1, c_v3
+        H,r = con_symmetry(X,c_vup,c_v,c_vdw)  
+        
+        if 0: ##not good, no use
+            "assign give value"
+            l0 = np.ones(len(v))*0.086
+            Hl1,rl1 = con_isometry_edges(X,c_vup,c_v,l0)
+            Hl2,rl2 = con_isometry_edges(X,c_v,c_vdw,l0)
+            H = sparse.vstack((H, Hl1, Hl2))
+            r = np.r_[r, rl1, rl2] 
+        
+        if 0:## only used for lilium_quad_rewrite_gp_remesh, _GeodesicPolarNet.obj
+            "join vertices into 1"
+            ##lilium_quad_rewrite_gp_remesh.obj:
+            bv = np.array([244, 248, 253, 259, 271, 283, 292, 299 ,303, 309, 312, 315, 316, 313, 310, 306, 304, 297,290, 282, 268, 257, 250, 247, 245, 240, 236, 234, 233, 235, 237, 241],dtype=int)
+             
+            ##lilium_quad_rewrite_gp_remesh_add.obj
+            #bv = np.array([585,584,581,579,577, 576, 578, 580, 582, 583, 586, 588, 590, 592, 594, 596, 598, 599,602, 604, 606, 607, 605, 603, 601, 600, 597, 595, 593, 591, 589 ,587],dtype=int)
+            
+            c_vl = column3D(bv[:-1],0,V)
+            c_vr = column3D(bv[1:],0,V)
+            Hj,rj = con_equal_vector(X, c_vl,c_vr)
+            H = sparse.vstack((H,Hj))
+            r = np.r_[r,rj] 
+        return H,r
+
     H1,r1 = _orthogonal(mesh,X,V)
     H2,r2 = con_general_chebyshev(half1=is_GO_or_OG,half2= not is_GO_or_OG)
     H = sparse.vstack((H1, H2))
     r = np.r_[r1, r2]  
+    
+    if 0:## only used for lilium_quad_rewrite_gp_remesh, _GeodesicPolarNet.obj
+        "geodesic polar"
+        Hg,rg = con_geodesic_polar(is_GO_or_OG)
+        H = sparse.vstack((H, Hg))
+        r = np.r_[r, rg]  
+        #print('gpnet:',np.sum(np.square(Hg*X-rg)))
     
     if is_SIR:
         Hs,rs = con_equal_polysegment(is_GO_or_OG)
@@ -390,7 +429,7 @@ def con_DOI__freeform(is_GO_or_OG=True,is_SIR=False,
         r = np.r_[r, r1, r2]   
     return H*w,r*w
 
-def con_GOnet(is_GO_or_OG=True,is_rrvstar=True,**kwargs):
+def con_GOnet(is_GO_or_OG=True,is_rrvstar=True,**kwargs): ##use this to compare with DOI
     """ paper: <Discrete GEODESIC PARALLEL COORDINATES>-SIGGRAPH ASIA 2019
     based on con_unit_edge() & con_1geodesic
     orthogonal: (e1-e3)*(e2-e4) = 0
